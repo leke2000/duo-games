@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>毁灭战士1993 · DOOM致敬版</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;
+    -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+  #screen{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;cursor:crosshair}
+  #scan{position:absolute;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.15) 0 1px,transparent 1px 3px)}
+  #ovl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5}
+  #ovl.hide{display:none}
+  .panel{background:rgba(6,2,2,.88);border:2px solid #8a1414;border-radius:6px;
+    box-shadow:0 0 34px rgba(200,30,10,.45),inset 0 0 18px rgba(120,10,0,.5);
+    padding:18px 26px;text-align:center;max-width:86vw;max-height:88vh;overflow:auto;color:#d8c8b0;
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+  .panel h1{color:#ff3b10;font-size:min(11vw,44px);margin:4px 0 2px;letter-spacing:6px;
+    text-shadow:0 0 14px #ff2800,3px 3px 0 #4a0000}
+  .panel h2{color:#ff7a30;font-size:min(6vw,22px);margin:2px 0 10px;letter-spacing:3px;text-shadow:2px 2px 0 #3a0000}
+  .panel p{font-size:14px;line-height:1.7;margin:6px 0;color:#c8b898}
+  .panel .stat{color:#ffb020;font-weight:bold}
+  .btn{display:inline-block;margin:6px;padding:9px 22px;font-size:16px;color:#ffd8a0;cursor:pointer;
+    background:linear-gradient(#5a1210,#320808);border:2px solid #a83820;border-radius:4px;
+    font-family:inherit;letter-spacing:2px;text-shadow:1px 1px 0 #000}
+  .btn:active{background:linear-gradient(#7a1e18,#420a0a);color:#fff}
+  .btn.small{font-size:13px;padding:6px 14px}
+  .btn.sel{border-color:#ffcc40;color:#ffe080;box-shadow:0 0 10px rgba(255,190,40,.55)}
+  .blink{animation:bl 1.1s steps(2) infinite}
+  @keyframes bl{50%{opacity:.25}}
+  #msg{position:absolute;left:8px;top:6px;color:#ff5030;font:bold 13px/1.5 "Microsoft YaHei",sans-serif;
+    text-shadow:1px 1px 0 #000;z-index:4;pointer-events:none;white-space:pre-line}
+  #touchUI{position:absolute;inset:0;z-index:3;display:none;pointer-events:none}
+  #stickBase{position:absolute;width:96px;height:96px;border:2px solid rgba(255,120,60,.4);border-radius:50%;
+    background:rgba(80,20,10,.22);left:26px;bottom:26px}
+  #stickKnob{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(255,120,50,.45);
+    left:26px;top:26px;box-shadow:0 0 8px rgba(255,80,20,.6)}
+  .tbtn{position:absolute;border-radius:50%;border:2px solid rgba(255,120,60,.5);color:#ffcc90;
+    background:rgba(90,18,10,.42);display:flex;align-items:center;justify-content:center;
+    font:bold 14px "Microsoft YaHei",sans-serif;pointer-events:auto;text-shadow:1px 1px 0 #000}
+  #btnFire{width:84px;height:84px;right:22px;bottom:24px;font-size:16px;border-color:rgba(255,60,40,.7);background:rgba(140,20,8,.5)}
+  #btnUse{width:56px;height:56px;right:118px;bottom:44px;font-size:13px}
+  #btnWpn{width:48px;height:48px;right:34px;bottom:126px;font-size:12px}
+  #btnPauseT{width:40px;height:40px;right:10px;top:10px;font-size:15px;opacity:.7}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="screen" width="320" height="200"></canvas>
+  <div id="scan"></div>
+  <div id="msg"></div>
+  <div id="ovl"><div class="panel" id="ovlBox"></div></div>
+  <div id="touchUI">
+    <div id="stickBase"><div id="stickKnob"></div></div>
+    <div class="tbtn" id="btnFire">开火</div>
+    <div class="tbtn" id="btnUse">使用</div>
+    <div class="tbtn" id="btnWpn">换枪</div>
+    <div class="tbtn" id="btnPauseT">Ⅱ</div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   毁灭战士1993 · 致敬版（原创复刻，致敬 id Software 1993）
+   光线投射引擎 + 程序化贴图/精灵/音效/音乐，单文件离线可玩
+   ============================================================ */
+window.addEventListener('error',e=>{ try{ msgBox('脚本错误: '+e.message, 99); }catch(_){} });
+
+// ---------- 基础 ----------
+const W=320, H=200, VIEWH=168, HUDH=32, HORIZON=VIEWH>>1;
+const FOVK=0.66, WS=(W/2)/FOVK;           // 水平投影缩放
+const cv=document.getElementById('screen'), ctx=cv.getContext('2d');
+const img=ctx.createImageData(W,H), FB=new Uint32Array(img.data.buffer);
+const zbuf=new Float32Array(W);
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const rnd=Math.random, floor=Math.floor;
+const rgb=(r,g,b)=>(255<<24)|((b&255)<<16)|((g&255)<<8)|(r&255);
+function shadeC(c,s){
+  let r=(c&255)*s|0, g=((c>>8)&255)*s|0, b=((c>>16)&255)*s|0;
+  if(r>255)r=255; if(g>255)g=255; if(b>255)b=255;
+  return (255<<24)|(b<<16)|(g<<8)|r;
+}
+function hsh(x,y){ let n=(x|0)*374761393+(y|0)*668265263; n=(n^(n>>13))*1274126177; return ((n^(n>>16))>>>0)/4294967295; }
+function vnoise(x,y){
+  const xi=floor(x), yi=floor(y), fx=x-xi, fy=y-yi;
+  const a=hsh(xi,yi), b=hsh(xi+1,yi), c=hsh(xi,yi+1), d=hsh(xi+1,yi+1);
+  const u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+
+// ---------- 贴图生成（64x64） ----------
+const TS=64;
+function newTex(){ return new Uint32Array(TS*TS); }
+function texRect(t,x0,y0,w,h,c){ for(let y=y0;y<y0+h;y++)for(let x=x0;x<x0+w;x++) if(x>=0&&y>=0&&x<TS&&y<TS) t[y*TS+x]=c; }
+function texNoise(t,base,varr,seed){
+  for(let y=0;y<TS;y++)for(let x=0;x<TS;x++){
+    const n=(vnoise((x+seed*31)/9,(y+seed*17)/9)-0.5)*2*varr
+           +(vnoise((x+seed*7)/3.5,(y+seed*3)/3.5)-0.5)*varr*0.6;
+    t[y*TS+x]=rgb(clamp(base[0]+n,0,255)|0,clamp(base[1]+n,0,255)|0,clamp(base[2]+n,0,255)|0);
+  }
+}
+function genTextures(){
+  const T={};
+  // 1 科技灰墙
+  T.t1=newTex(); texNoise(T.t1,[96,98,104],16,1);
+  for(let y=0;y<TS;y+=16){ texRect(T.t1,0,y,TS,1,rgb(50,52,58)); texRect(T.t1,0,y+15,TS,1,rgb(130,132,140)); }
+  for(let x=0;x<TS;x+=16) texRect(T.t1,x,0,1,TS,rgb(56,58,64));
+  for(let y=3;y<TS;y+=16)for(let x=3;x<TS;x+=16) texRect(T.t1,x,y,2,2,rgb(150,155,165));
+  texRect(T.t1,8,24,48,6,rgb(30,60,40)); texRect(T.t1,10,26,44,2,rgb(60,190,90));
+  // 5 电脑面板墙
+  T.t5=newTex(); texNoise(T.t5,[52,54,64],10,2);
+  texRect(T.t5,0,0,TS,4,rgb(28,30,36)); texRect(T.t5,0,60,TS,4,rgb(28,30,36));
+  const cols=[rgb(255,60,40),rgb(60,220,90),rgb(255,210,50),rgb(70,140,255)];
+  for(let i=0;i<14;i++){ const cx=4+floor(hsh(i,7)*56), cy=8+floor(hsh(i,13)*20);
+    texRect(T.t5,cx,cy,3,3,cols[floor(hsh(i,3)*4)]); texRect(T.t5,cx,cy,1,1,rgb(255,255,220)); }
+  texRect(T.t5,4,34,56,22,rgb(24,26,34));
+  for(let y=36;y<54;y+=4)for(let x=6;x<58;x+=8)
+    texRect(T.t5,x,y,6,2,rgb(30+hsh(x,y)*90|0,40+hsh(y,x)*90|0,60));
+  // 2 棕砖墙
+  T.t2=newTex(); texNoise(T.t2,[74,52,38],12,3);
+  for(let y=0;y<TS;y+=8){
+    texRect(T.t2,0,y,TS,1,rgb(34,24,18));
+    const off=(y/8)%2?8:0;
+    for(let x=off;x<TS;x+=16){ texRect(T.t2,x,y,1,8,rgb(34,24,18));
+      texRect(T.t2,x+1,y+1,14,6,rgb(96+hsh(x,y)*30|0,64+hsh(x,y+1)*22|0,44)); }
+  }
+  // 3 绿色大理石
+  T.t3=newTex(); texNoise(T.t3,[70,96,72],14,4);
+  for(let i=0;i<40;i++){ let px=hsh(i,1)*TS, py=hsh(i,2)*TS;
+    for(let s=0;s<10;s++){ texRect(T.t3,px|0,py|0,2,1,rgb(38,60,42)); px+=hsh(i,s)*4-2; py+=hsh(i,s+9)*4-2; } }
+  // 4 血锈金属
+  T.t4=newTex(); texNoise(T.t4,[92,36,30],18,5);
+  for(let i=0;i<26;i++){ const sx=floor(hsh(i,21)*TS); let sy=floor(hsh(i,22)*TS);
+    for(let s=0;s<8;s++){ texRect(T.t4,sx,sy,1,2,rgb(48,14,10)); sy=(sy+2)%TS; } }
+  for(let y=0;y<TS;y+=32) texRect(T.t4,0,y,TS,2,rgb(40,16,12));
+  // 门 + 锁门
+  T.door=newTex(); texNoise(T.door,[88,88,96],10,6);
+  texRect(T.door,0,0,TS,3,rgb(40,40,46)); texRect(T.door,0,61,TS,3,rgb(40,40,46));
+  for(let x=0;x<TS;x+=21) texRect(T.door,x,0,2,TS,rgb(46,46,52));
+  for(let y=6;y<58;y+=10)for(let x=4;x<60;x+=21) texRect(T.door,x,y,14,2,rgb(120,122,130));
+  for(let x=0;x<TS;x+=8) texRect(T.door,x,28,4,8,x%16?rgb(190,150,20):rgb(30,28,24));
+  const tintTex=(dst,src,r,g,b)=>{ for(let i=0;i<TS*TS;i++){ const c=src[i];
+    dst[i]=rgb(((c&255)*0.5+r)|0,(((c>>8)&255)*0.5+g)|0,(((c>>16)&255)*0.5+b)|0); } };
+  T.doorR=newTex(); tintTex(T.doorR,T.door,0,60,120);
+  T.doorB=newTex(); tintTex(T.doorB,T.door,0,60,200);
+  for(let x=24;x<40;x+=3){ texRect(T.doorR,x,10,2,44,rgb(200,30,30)); texRect(T.doorB,x,10,2,44,rgb(40,80,230)); }
+  texRect(T.doorR,25,11,1,42,rgb(255,120,110)); texRect(T.doorB,25,11,1,42,rgb(150,190,255));
+  // S 出口开关
+  T.exit=newTex(); texNoise(T.exit,[86,88,94],8,8);
+  texRect(T.exit,20,14,24,36,rgb(30,32,38)); texRect(T.exit,22,16,20,32,rgb(60,64,70));
+  texRect(T.exit,25,20,14,10,rgb(160,30,20)); texRect(T.exit,28,23,8,4,rgb(255,90,60));
+  texRect(T.exit,25,34,14,10,rgb(24,90,30)); texRect(T.exit,28,37,8,4,rgb(90,240,110));
+  // 地板/天花板
+  T.fTech=newTex(); texNoise(T.fTech,[64,66,70],10,9);
+  for(let y=0;y<TS;y+=16)for(let x=0;x<TS;x+=16){ texRect(T.fTech,x,y,16,1,rgb(40,42,46)); texRect(T.fTech,x,y,1,16,rgb(40,42,46)); }
+  T.cTech=newTex(); texNoise(T.cTech,[44,46,52],8,10);
+  for(let y=0;y<TS;y+=32) texRect(T.cTech,0,y,TS,2,rgb(28,30,36));
+  T.fDirt=newTex(); texNoise(T.fDirt,[86,70,52],16,11);
+  for(let i=0;i<30;i++) texRect(T.fDirt,floor(hsh(i,31)*TS),floor(hsh(i,32)*TS),2,1,rgb(60,48,36));
+  T.fBrick=newTex(); texNoise(T.fBrick,[70,58,46],12,12);
+  for(let y=0;y<TS;y+=16)for(let x=0;x<TS;x+=16){ texRect(T.fBrick,x,y,16,1,rgb(36,30,24)); texRect(T.fBrick,x,y,1,16,rgb(36,30,24)); }
+  T.fRock=newTex(); texNoise(T.fRock,[74,40,34],18,13);
+  for(let i=0;i<24;i++){ let px=hsh(i,41)*TS,py=hsh(i,42)*TS; for(let s=0;s<6;s++){ texRect(T.fRock,px|0,py|0,2,1,rgb(44,20,16)); px+=2;py+=1; } }
+  T.cRock=newTex(); texNoise(T.cRock,[38,22,20],10,14);
+  T.slimeA=newTex(); T.slimeB=newTex(); T.lavaA=newTex(); T.lavaB=newTex();
+  for(const [tex,sd,base,hot] of [[T.slimeA,0,[30,120,40],[90,220,80]],[T.slimeB,100,[26,110,36],[80,200,70]],
+                                  [T.lavaA,200,[140,50,16],[255,160,30]],[T.lavaB,300,[120,40,12],[255,140,20]]]){
+    texNoise(tex,base,26,sd);
+    for(let i=0;i<20;i++){ const px=floor(hsh(i,sd)*TS),py=floor(hsh(i,sd+1)*TS);
+      texRect(tex,px,py,3,2,rgb(hot[0],hot[1],hot[2])); texRect(tex,px+1,py+1,1,1,rgb(200,255,140)); }
+  }
+  return T;
+}
+function themeMap(theme){
+  if(theme==='tech') return {floor:TEX.fTech,ceil:TEX.cTech,out:TEX.fDirt};
+  if(theme==='brick') return {floor:TEX.fBrick,ceil:TEX.cTech,out:TEX.fDirt};
+  return {floor:TEX.fRock,ceil:TEX.cRock,out:TEX.fRock};
+}
+// 预计算明暗贴图缓存：内层渲染循环查表代替逐像素乘法（性能优化）
+const SHN=13; // 0..12 级亮度，10=原始，11/12=开火补光增亮
+const shadeCache=new Map();
+function shadedTex(tex,lv){
+  let m=shadeCache.get(tex);
+  if(!m){ m=new Array(SHN); shadeCache.set(tex,m); }
+  if(!m[lv]){
+    const arr=new Uint32Array(TS*TS), s=lv/10;
+    for(let i=0;i<TS*TS;i++) arr[i]=shadeC(tex[i],s);
+    m[lv]=arr;
+  }
+  return m[lv];
+}
+
+// ---------- 精灵生成 ----------
+function bake(w,h,draw){
+  const d=new Uint32Array(w*h);
+  const px=(x,y,c)=>{ if(x>=0&&y>=0&&x<w&&y<h) d[y*w+x]=c; };
+  const rc=(x,y,ww,hh,c)=>{ for(let j=0;j<hh;j++)for(let i=0;i<ww;i++) px(x+i,y+j,c); };
+  const mir=(x,y,ww,hh,c)=>{ rc(x,y,ww,hh,c); rc(w-x-ww,y,ww,hh,c); };
+  draw(px,rc,mir,w,h);
+  return {w,h,data:d};
+}
+function squash(src,sy,yoff){ // 垂直压缩用于死亡倒地帧
+  const d=new Uint32Array(src.w*src.h);
+  for(let y=0;y<src.h;y++){
+    const syy=(y-yoff)/sy;
+    if(syy<0||syy>=src.h) continue;
+    for(let x=0;x<src.w;x++){ const c=src.data[floor(syy)*src.w+x]; if(c>>>24) d[y*src.w+x]=c; }
+  }
+  return {w:src.w,h:src.h,data:d};
+}
+function tinted(sp,col,a){
+  const d=sp.data;
+  for(let i=0;i<d.length;i++){ const c=d[i]; if(!(c>>>24)) continue;
+    d[i]=rgb(((c&255)*(1-a)+(col&255)*a)|0,(((c>>8)&255)*(1-a)+((col>>8)&255)*a)|0,(((c>>16)&255)*(1-a)+((col>>16)&255)*a)|0); }
+  return sp;
+}
+function genSprites(){
+  const S={};
+  // 火球怪 imp
+  const impBase=bake(26,30,(p,rc,mir)=>{
+    const skin=rgb(122,74,38), dark=rgb(78,44,20), belly=rgb(160,108,58), horn=rgb(214,196,160);
+    mir(8,24,4,6,dark); mir(14,24,4,6,dark);            // 腿
+    rc(6,8,14,12,skin); mir(4,10,3,8,dark); rc(9,11,8,7,belly);
+    mir(5,6,2,3,horn); mir(19,6,2,3,horn);              // 肩刺
+    rc(8,0,10,9,skin);                                   // 头
+    rc(7,2,2,3,horn); rc(17,2,2,3,horn);
+    rc(9,3,3,2,rgb(255,70,40)); rc(14,3,3,2,rgb(255,70,40));
+    p(10,4,rgb(255,200,60)); p(15,4,rgb(255,200,60));
+    rc(11,7,4,1,rgb(60,26,12));
+    mir(3,12,3,7,skin); mir(20,12,3,7,dark);            // 垂手
+  });
+  const impAtk=bake(26,30,(p,rc,mir)=>{
+    const skin=rgb(122,74,38), dark=rgb(78,44,20), belly=rgb(160,108,58), horn=rgb(214,196,160);
+    mir(8,24,4,6,dark); mir(14,24,4,6,dark);
+    rc(6,8,14,12,skin); mir(4,10,3,8,dark); rc(9,11,8,7,belly);
+    mir(5,6,2,3,horn); mir(19,6,2,3,horn);
+    rc(8,0,10,9,skin); rc(7,2,2,3,horn); rc(17,2,2,3,horn);
+    rc(9,3,3,2,rgb(255,70,40)); rc(14,3,3,2,rgb(255,70,40));
+    rc(11,7,4,1,rgb(60,26,12));
+    rc(2,4,4,4,skin); rc(20,4,4,4,skin);                 // 举手
+    rc(1,1,3,4,rgb(255,170,40)); rc(22,1,3,4,rgb(255,170,40)); // 火球
+  });
+  const impWalk2=bake(26,30,(p,rc,mir)=>{
+    const dark=rgb(78,44,20), skin=rgb(122,74,38);
+    // 在基础帧上覆盖换步腿
+    impBase.data.forEach((c,i)=>{ p(i%26,floor(i/26),c); });
+    mir(6,23,4,7,dark); mir(16,22,4,7,skin);
+  });
+  S.imp=[
+    impBase,
+    impWalk2,
+    impAtk,
+    tinted(bake(26,30,(p,rc,mir)=>{ impBase.data.forEach((c,i)=>p(i%26,floor(i/26),c)); }),rgb(255,120,90),0.45),
+    squash(impBase,0.7,9), squash(impBase,0.42,17), squash(impBase,0.24,23),
+  ];
+  // 粉红恶魔 pinky
+  const pinkDraw=(leg)=>(p,rc,mir)=>{
+    const skin=rgb(196,106,96), dark=rgb(130,62,56);
+    rc(7,10,16,12,skin); mir(4,12,3,8,dark);
+    mir(leg?8:10,22,5,4,dark); mir(leg?21:19,22,5,4,dark);
+    rc(12,4,10,8,skin); rc(11,5,3,4,dark); rc(20,5,3,4,dark);
+    rc(14,6,2,2,rgb(255,220,40)); rc(18,6,2,2,rgb(255,220,40));
+    rc(12,14,10,2,rgb(90,30,30));
+    mir(5,9,3,2,dark);
+  };
+  const pinkBase=bake(34,26,pinkDraw(0));
+  const pinkAtk=bake(34,26,(p,rc,mir)=>{
+    const skin=rgb(196,106,96), dark=rgb(130,62,56), maw=rgb(70,16,16), tooth=rgb(240,232,210);
+    pinkDraw(0)(p,rc,mir);
+    rc(10,12,14,7,maw);
+    for(let x=10;x<24;x+=3){ rc(x,12,2,2,tooth); rc(x,17,2,2,tooth); }
+  });
+  S.pinky=[
+    pinkBase,
+    bake(34,26,pinkDraw(1)),
+    pinkAtk,
+    tinted(bake(34,26,(p,rc,mir)=>{ pinkBase.data.forEach((c,i)=>p(i%34,floor(i/26),c)); }),rgb(255,120,90),0.45),
+    squash(pinkBase,0.7,8), squash(pinkBase,0.42,15), squash(pinkBase,0.24,20),
+  ];
+  // 油桶
+  S.barrel=bake(16,22,(p,rc)=>{
+    rc(2,2,12,19,rgb(96,110,96)); rc(2,2,12,2,rgb(140,160,140));
+    rc(2,10,12,1,rgb(56,66,56)); rc(2,17,12,1,rgb(56,66,56));
+    rc(4,4,3,6,rgb(130,150,130)); rc(11,4,2,6,rgb(60,72,60));
+    rc(4,0,8,2,rgb(70,180,70)); rc(5,0,6,1,rgb(150,255,120));
+    rc(2,21,12,1,rgb(40,46,40));
+  });
+  // 物品
+  S.medkit=bake(16,12,(p,rc)=>{ rc(0,1,16,11,rgb(228,228,222)); rc(0,1,16,1,rgb(255,255,255)); rc(0,11,16,1,rgb(150,150,148));
+    rc(6,3,4,7,rgb(210,30,30)); rc(3,5,10,3,rgb(210,30,30)); });
+  S.stim=bake(12,8,(p,rc)=>{ rc(0,1,12,7,rgb(200,205,210)); rc(2,3,8,3,rgb(200,40,40)); rc(0,1,12,1,rgb(255,255,255)); });
+  S.armor=bake(16,14,(p,rc,mir)=>{ rc(3,1,10,3,rgb(40,150,50)); mir(2,3,5,9,rgb(50,170,60)); rc(5,4,6,8,rgb(70,200,80)); rc(7,4,2,8,rgb(120,240,120)); });
+  S.clip=bake(10,8,(p,rc)=>{ rc(1,2,8,6,rgb(150,130,60)); rc(1,2,8,2,rgb(200,180,90)); rc(2,4,6,1,rgb(90,80,40)); });
+  S.shells=bake(12,9,(p,rc)=>{ rc(0,2,12,7,rgb(160,40,30)); rc(0,2,12,2,rgb(210,70,40));
+    for(let x=2;x<11;x+=3) rc(x,0,2,3,rgb(190,150,40)); });
+  S.shotgun=bake(30,10,(p,rc)=>{ rc(0,3,20,2,rgb(120,122,128)); rc(0,5,20,2,rgb(80,82,88)); rc(20,2,9,5,rgb(120,80,40)); rc(23,3,4,2,rgb(90,58,26)); });
+  S.chaingun=bake(26,14,(p,rc)=>{ rc(2,4,22,6,rgb(110,112,118)); rc(2,10,6,4,rgb(70,72,78));
+    rc(4,2,3,4,rgb(90,92,98)); rc(10,1,3,5,rgb(90,92,98)); rc(16,2,3,4,rgb(90,92,98)); rc(6,5,14,2,rgb(60,62,68)); });
+  S.keyR=bake(10,14,(p,rc)=>{ rc(1,0,8,14,rgb(200,30,30)); rc(2,1,6,4,rgb(255,120,110)); rc(2,8,6,2,rgb(255,255,255)); });
+  S.keyB=bake(10,14,(p,rc)=>{ rc(1,0,8,14,rgb(40,80,220)); rc(2,1,6,4,rgb(130,170,255)); rc(2,8,6,2,rgb(255,255,255)); });
+  S.lamp=bake(12,26,(p,rc)=>{ rc(5,6,2,20,rgb(90,94,100)); rc(4,24,4,2,rgb(60,64,70));
+    rc(3,0,6,7,rgb(255,170,40)); rc(4,1,4,5,rgb(255,230,120)); rc(2,2,8,3,rgb(200,90,20)); });
+  S.fireball=[0,1].map(f=>bake(12,12,(p,rc)=>{
+    rc(2,2,8,8,rgb(255,120,20)); rc(3,3,6,6,rgb(255,200,40)); rc(4+f,4,3,3,rgb(255,255,200));
+    p(1,4,rgb(255,80,10)); p(10,7-f,rgb(255,80,10));
+  }));
+  S.explo=[0,1,2,3].map(f=>bake(24,24,(p,rc)=>{
+    const s=4+f*5, o=(24-s)/2|0;
+    rc(o,o,s,s,rgb(255,150+f*20,30));
+    rc(o+2,o+2,Math.max(0,s-4),Math.max(0,s-4),rgb(255,230,120));
+    if(f>1) rc(o+4,o+4,Math.max(0,s-8),Math.max(0,s-8),rgb(120,60,20));
+  }));
+  S.puff=[0,1,2].map(f=>bake(10,10,(p,rc)=>{ const s=3+f*2,o=(10-s)/2|0;
+    rc(o,o,s,s,rgb(180,180,180)); rc(o+1,o+1,Math.max(0,s-2),Math.max(0,s-2),rgb(210,210,210)); }));
+  S.blood=[0,1,2].map(f=>bake(10,10,(p,rc)=>{ const s=3+f*2,o=(10-s)/2|0;
+    rc(o,o,s,s,rgb(140,20,20)); rc(o+1,o+1,Math.max(0,s-2),Math.max(0,s-2),rgb(190,40,30)); }));
+  return S;
+}
+
+// ---------- HUD 头脸 ----------
+function genFaces(){
+  const F=[];
+  for(let t=0;t<5;t++)for(let d=-1;d<=1;d++) F.push(face(t,d,'n'));
+  F.push(face(0,0,'grin')); F.push(face(2,0,'ouch')); F.push(face(4,0,'dead'));
+  function face(tier,dir,mood){
+    return bake(24,30,(p,rc,mir)=>{
+      const skin=rgb(214,164,120), skinD=rgb(176,128,92), hair=rgb(84,56,34);
+      const bloodN=[0,3,7,12,18][tier];
+      rc(4,2,16,28,skin); mir(4,2,2,28,skinD);
+      rc(6,0,12,4,hair); rc(5,1,14,3,hair);
+      if(mood==='dead'){
+        rc(7,10,4,1,rgb(40,20,16)); rc(13,10,4,1,rgb(40,20,16));
+        p(8,9,rgb(40,20,16)); p(14,11,rgb(40,20,16));
+        p(9,11,rgb(40,20,16)); p(13,9,rgb(40,20,16));
+      } else if(mood==='ouch'){
+        rc(7,10,4,2,rgb(30,20,16)); rc(13,10,4,2,rgb(30,20,16));
+      } else {
+        rc(6,8,5,1,rgb(90,60,40)); rc(13,8,5,1,rgb(90,60,40));
+        rc(7+dir,10,3,2,rgb(250,250,250)); rc(13+dir,10,3,2,rgb(250,250,250));
+        p(8+dir,10,rgb(60,40,110)); p(14+dir,10,rgb(60,40,110));
+      }
+      rc(11,13,2,3,skinD);
+      if(mood==='grin'){ rc(8,19,8,3,rgb(60,20,16)); rc(8,19,8,1,rgb(240,230,210));
+        p(9,20,rgb(60,20,16)); p(11,20,rgb(60,20,16)); p(13,20,rgb(60,20,16)); }
+      else if(mood==='ouch') rc(10,19,4,4,rgb(60,20,16));
+      else if(mood==='dead') rc(9,20,6,2,rgb(90,30,30));
+      else { const yo=[0,0,1,1,2][tier];
+        rc(8,18+yo,8,1,rgb(90,40,30));
+        if(tier>=3) rc(9,19+yo,6,1,rgb(60,20,16)); }
+      for(let i=0;i<bloodN;i++){ const bx=5+floor(hsh(i,tier*7+1)*14), by=3+floor(hsh(i,tier*7+2)*24);
+        rc(bx,by,1,2+floor(hsh(i,9)*4),rgb(170,20,14)); }
+      if(mood==='dead') for(let i=0;i<10;i++){ const bx=5+floor(hsh(i,77)*14); rc(bx,4+i*2,2,3,rgb(150,16,12)); }
+    });
+  }
+  return F;
+}
+
+// ---------- 微型字体 ----------
+const FONT={
+'0':'111,101,101,101,111','1':'010,110,010,010,111','2':'111,001,111,100,111','3':'111,001,011,001,111',
+'4':'101,101,111,001,001','5':'111,100,111,001,111','6':'111,100,111,101,111','7':'111,001,001,010,010',
+'8':'111,101,111,101,111','9':'111,101,111,001,111',
+'A':'010,101,111,101,101','B':'110,101,110,101,110','C':'011,100,100,100,011','D':'110,101,101,101,110',
+'E':'111,100,110,100,111','F':'111,100,110,100,100','G':'011,100,101,101,011','H':'101,101,111,101,101',
+'I':'111,010,010,010,111','J':'001,001,001,101,010','K':'101,101,110,101,101','L':'100,100,100,100,111',
+'M':'101,111,101,101,101','N':'110,101,101,101,101','O':'010,101,101,101,010','P':'110,101,110,100,100',
+'Q':'010,101,101,010,001','R':'110,101,110,101,101','S':'011,100,010,001,110','T':'111,010,010,010,010',
+'U':'101,101,101,101,111','V':'101,101,101,101,010','W':'101,101,101,111,101','X':'101,101,010,101,101',
+'Y':'101,101,010,010,010','Z':'111,001,010,100,111',
+'%':'101,001,010,100,101','.':'000,000,000,000,010',':':'000,010,000,010,000','-':'000,000,111,000,000',
+'!':'010,010,010,000,010','/':'001,001,010,100,100',' ':'000,000,000,000,000'
+};
+function drawTiny(fb,x,y,str,c,scale){
+  scale=scale||1;
+  let cx=x;
+  for(const ch of str.toUpperCase()){
+    const g=FONT[ch];
+    if(g){ const rows=g.split(',');
+      for(let ry=0;ry<5;ry++)for(let rx=0;rx<3;rx++) if(rows[ry][rx]==='1'){
+        for(let sy=0;sy<scale;sy++)for(let sx=0;sx<scale;sx++){
+          const px=cx+rx*scale+sx, py=y+ry*scale+sy;
+          if(px>=0&&px<W&&py>=0&&py<H) fb[py*W+px]=c;
+        } } }
+    cx+=4*scale;
+  }
+  return cx-x;
+}
+function tinyWidth(str,scale){ scale=scale||1; return str.length*4*scale-scale; }
+
+// ---------- 关卡数据 ----------
+// 墙: 1科技 5电脑 2砖 3大理石 4血锈 | D门 R红锁门 B蓝锁门 S出口开关
+// 地面: .地板 o室外(天空) ~毒液/岩浆
+// 物件: P玩家 i火球怪 p粉红恶魔 b油桶 h医疗包 f兴奋剂 m护甲 c弹夹 s霰弹 G霰弹枪 g机枪 k红卡 K蓝卡 x灯柱
+const LEVELS=[
+{ name:'第一关 · 基地突袭', theme:'tech', sky:true, ang:0,
+  brief:'入侵警报：恶魔通过传送门涌入了军事基地。\n拿起武器，杀出一条血路，找到出口开关。',
+  map:[
+"1111111111111111111111111111",
+"1....x.1..........1111511111",
+"1.P..c.1..G...s...1....i...1",
+"1......D..........D......h.1",
+"1......1.b........1........1",
+"111111111111D111111111511111",
+"1ooooooooooooooo~oooo5ooioo1",
+"1oo~~ooooo..m..oo~~~oopoooo1",
+"1ooooi~~~~~~~ooooo..i..oooo1",
+"1oo~~~~~oo..i..oo~~~~oooo..1",
+"11D1111111111111111D11111111",
+"1....111111111111....1111111",
+"1.hf.111111111111.b..1111111",
+"1....111151111111....1111111",
+"11111111111111111....1111111",
+"11111111111111111.p.11111111",
+"1111111111111111111D11111111",
+"1111111111111111111....s...S",
+"1111111111111111111.b......1",
+"1111111111111111111111111111",
+]},
+{ name:'第二关 · 要塞兵营', theme:'brick', sky:true, ang:Math.PI/2,
+  brief:'要塞深处戒备森严。\n找到红色钥匙卡，才能打开通往出口的封印之门。',
+  map:[
+"2222222222222222222222222222",
+"2.....2........2...........2",
+"2.P...2..i..c..D....i...s..2",
+"2..h..2........2.....b.....2",
+"222D2222222252222222D2222222",
+"2ooooooooooooooooooooooooo.2",
+"2o~~o...o~~~o..o~~~o...o...2",
+"2o~~o.i.o~~~o..o~~~o.g.o...2",
+"2oooo.p.ooooo..ooooo....k..2",
+"2o~~~~~~~~~~o....o~~~~~o...2",
+"22D2222222222D222222222D2222",
+"2.....2...............2....2",
+"2..s..2..b...p..i..b..2..c.2",
+"2.....2...............2....2",
+"22.2222222222D22222222222222",
+"22.2222222222.22222222222222",
+"2.....222222..2222222.....b2",
+"2.hs..222222.R........i....S",
+"2.....222222...............2",
+"2222222222222222222222222222",
+]},
+{ name:'第三关 · 地狱之心', theme:'hell', sky:false, ang:0,
+  brief:'这里是传送门的源头——地狱之心。\n拿到蓝色钥匙卡，冲进竞技场，终结这一切！',
+  map:[
+"3333333333333333333333333333",
+"3......3..........3333333333",
+"3.P..f.3...i...c..3....b...3",
+"3......D..........D........3",
+"333D333333333333D3333333D333",
+"3.......~~~~~~~..........b.3",
+"3..p.....~~~~~~.....p......3",
+"3........~~~~~~....i.......3",
+"3.i......~~~~~~.......m....3",
+"3..........~...........K...3",
+"33333D33333333333333D3333333",
+"3..........................3",
+"3.g..p......p......b.......3",
+"3..........................3",
+"3333333333333B33333333333333",
+"3..........................3",
+"3..i...p....ii......p...b..3",
+"3.....b........i...........S",
+"3..h....c...s..........s...3",
+"3333333333333333333333333333",
+]},
+];
+
+// ---------- 音频 ----------
+let AC=null, masterG=null, musicG=null, noiseBuf=null, musicOn=true;
+function initAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  masterG=AC.createGain(); masterG.gain.value=0.5; masterG.connect(AC.destination);
+  musicG=AC.createGain(); musicG.gain.value=0.3; musicG.connect(masterG);
+  noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
+  const d=noiseBuf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+}
+function noiseHit(t0,dur,f0,f1,vol,type){
+  const src=AC.createBufferSource(); src.buffer=noiseBuf; src.loop=true;
+  const flt=AC.createBiquadFilter(); flt.type=type||'lowpass';
+  flt.frequency.setValueAtTime(f0,t0); flt.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t0+dur);
+  const g=AC.createGain(); g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  src.connect(flt); flt.connect(g); g.connect(masterG);
+  src.start(t0); src.stop(t0+dur+0.02);
+}
+function tone(t0,dur,f0,f1,vol,type){
+  const o=AC.createOscillator(); o.type=type||'sine';
+  o.frequency.setValueAtTime(f0,t0); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t0+dur);
+  const g=AC.createGain(); g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  o.connect(g); g.connect(masterG); o.start(t0); o.stop(t0+dur+0.02);
+}
+function sfx(name){
+  if(!AC) return;
+  const t=AC.currentTime;
+  switch(name){
+    case 'pistol': noiseHit(t,0.09,3200,500,0.5); tone(t,0.07,900,120,0.25,'square'); break;
+    case 'shotgun': noiseHit(t,0.28,1500,120,0.8); tone(t,0.22,150,40,0.5); break;
+    case 'chaingun': noiseHit(t,0.06,2800,600,0.42); tone(t,0.05,700,150,0.18,'square'); break;
+    case 'punch': noiseHit(t,0.08,900,200,0.3,'bandpass'); break;
+    case 'hitwall': noiseHit(t,0.05,2000,800,0.16,'bandpass'); break;
+    case 'fireball': tone(t,0.3,420,90,0.28,'sawtooth'); noiseHit(t,0.25,900,200,0.2); break;
+    case 'boom': noiseHit(t,0.6,900,50,0.9); tone(t,0.5,90,28,0.6); break;
+    case 'door': tone(t,0.7,65,85,0.22,'square'); noiseHit(t,0.6,400,300,0.12); break;
+    case 'lock': tone(t,0.12,180,120,0.3,'square'); tone(t+0.13,0.12,140,90,0.3,'square'); break;
+    case 'pickup': tone(t,0.06,660,660,0.25,'square'); tone(t+0.07,0.09,990,990,0.25,'square'); break;
+    case 'wpick': [523,659,784,1046].forEach((f,i)=>tone(t+i*0.06,0.08,f,f,0.22,'square')); break;
+    case 'key': [784,988,1318].forEach((f,i)=>tone(t+i*0.05,0.09,f,f,0.22,'triangle')); break;
+    case 'pain': tone(t,0.16,220,90,0.4,'sawtooth'); noiseHit(t,0.12,500,150,0.3); break;
+    case 'pdeath': tone(t,0.6,180,40,0.45,'sawtooth'); noiseHit(t,0.5,400,60,0.4); break;
+    case 'sight': tone(t,0.4,95,140,0.34,'sawtooth'); tone(t+0.05,0.4,60,45,0.3,'sawtooth'); break;
+    case 'edeath': tone(t,0.5,150,35,0.4,'sawtooth'); noiseHit(t,0.4,600,80,0.35); break;
+    case 'switch': tone(t,0.08,300,200,0.3,'square'); noiseHit(t+0.02,0.15,1200,200,0.3); break;
+    case 'nukage': noiseHit(t,0.2,300,120,0.25); break;
+    case 'empty': tone(t,0.05,1200,900,0.15,'square'); break;
+  }
+}
+// 原创金属风 BGM（E小调连复段，致敬风格而非原曲）
+const RIFF=[0,null,0,0,null,0,null,3, 0,null,0,0,6,5,3,0, 0,null,0,0,null,0,null,3, 0,null,0,0,8,7,6,5];
+let musStep=0, musNext=0;
+function schedMusic(){
+  if(!AC||!musicOn||state!=='play') return;
+  if(musNext<AC.currentTime-0.25) musNext=AC.currentTime;
+  const SPB=60/148/4;
+  while(musNext<AC.currentTime+0.15){
+    const st=musStep%32, t0=Math.max(musNext,AC.currentTime);
+    const n=RIFF[st];
+    if(n!==null) chord(t0,82.41*Math.pow(2,n/12),SPB*0.95);
+    if(st%16===0||st%16===8||st%16===10) drum(t0,'k');
+    if(st%16===4||st%16===12) drum(t0,'s');
+    if(st%2===0) drum(t0,'h');
+    musNext+=SPB; musStep++;
+  }
+  function chord(t0,f,d){
+    const ws=AC.createWaveShaper(); const curve=new Float32Array(64);
+    for(let i=0;i<64;i++){ const x=i/32-1; curve[i]=Math.tanh(2.6*x); } ws.curve=curve;
+    const flt=AC.createBiquadFilter(); flt.type='lowpass'; flt.frequency.value=950;
+    const g=AC.createGain(); g.gain.setValueAtTime(0.13,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+d);
+    ws.connect(flt); flt.connect(g); g.connect(musicG);
+    [-1,1].forEach(det=>{
+      const o=AC.createOscillator(); o.type='sawtooth';
+      o.frequency.value=f; o.detune.value=det*9;
+      o.connect(ws); o.start(t0); o.stop(t0+d+0.02);
+      const o2=AC.createOscillator(); o2.type='sawtooth'; o2.frequency.value=f*2.02;
+      const g2=AC.createGain(); g2.gain.value=0.35; o2.connect(g2); g2.connect(ws);
+      o2.start(t0); o2.stop(t0+d+0.02);
+    });
+  }
+  function drum(t0,k){
+    if(k==='k'){ const o=AC.createOscillator(); o.frequency.setValueAtTime(120,t0);
+      o.frequency.exponentialRampToValueAtTime(38,t0+0.1);
+      const g=AC.createGain(); g.gain.setValueAtTime(0.5,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+0.12);
+      o.connect(g); g.connect(musicG); o.start(t0); o.stop(t0+0.14); }
+    else { const src=AC.createBufferSource(); src.buffer=noiseBuf; src.loop=true;
+      const flt=AC.createBiquadFilter(); flt.type=k==='s'?'bandpass':'highpass';
+      flt.frequency.value=k==='s'?1800:7000;
+      const g=AC.createGain(); g.gain.setValueAtTime(k==='s'?0.28:0.1,t0);
+      g.gain.exponentialRampToValueAtTime(0.001,t0+(k==='s'?0.14:0.05));
+      src.connect(flt); flt.connect(g); g.connect(musicG); src.start(t0); src.stop(t0+0.2); }
+  }
+}
+
+// ---------- 全局状态 ----------
+let TEX=null, SPR=null, FACES=null, THEME=null;
+let state='title';
+let diff=1;
+const DIFF=[{dm:0.6,cd:1.35,sp:0.85},{dm:1,cd:1,sp:1},{dm:1.5,cd:0.72,sp:1.12}];
+let lvlIdx=0, grid=[], GW=0, GH=0, doors=new Map(), things=[], projs=[], fxs=[];
+let P=null, keys={}, totalKills=0, kills=0, totalItems=0, itemsGot=0, lvlTime=0, totalTime=0;
+let mapOn=false, mouseFire=false, useEdge=false, cheatBuf='', cheatGod=false;
+let bobT=0, flashDmg=0, flashPick=0, lightBoost=0, faceDir=0, faceT=0, faceMood='n', faceMoodT=0;
+let deadT=0, shake=0, wTimer=0, wRaise=0, wCur=1, wPrevFireT=0;
+let touchMode=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+
+const WEAPONS=[
+ {name:'拳头',   ammo:null,  rate:0.45, use:()=>{ sfx('punch'); fireHitscan(0,1.5,2+rnd()*18|0); }},
+ {name:'手枪',   ammo:'bul', rate:0.42, use:()=>{ sfx('pistol'); fireHitscan(0.014,24,6+rnd()*9|0); }},
+ {name:'霰弹枪', ammo:'shl', rate:0.95, use:()=>{ sfx('shotgun'); for(let i=0;i<7;i++) fireHitscan(0.09,22,4+rnd()*9|0); shake=Math.max(shake,3); }},
+ {name:'转管机枪',ammo:'bul', rate:0.11, use:()=>{ sfx('chaingun'); fireHitscan(0.045,24,6+rnd()*9|0); }},
+];
+
+// ---------- 关卡装载 ----------
+function addItem(kind,x,y){ things.push({kind,x:x+0.5,y:y+0.5,r:0.3,alive:true,flash:0}); }
+function loadLevel(n){
+  lvlIdx=n;
+  const L=LEVELS[n];
+  THEME=themeMap(L.theme);
+  const rows=L.map.slice();
+  GH=rows.length; GW=0;
+  for(const r of rows) GW=Math.max(GW,r.length);
+  doors.clear(); things=[]; projs=[]; fxs=[];
+  totalKills=0; kills=0; totalItems=0; itemsGot=0; lvlTime=0;
+  let sx=1.5, sy=1.5;
+  for(let y=0;y<GH;y++){
+    let row=rows[y];
+    while(row.length<GW) row+='1';
+    rows[y]=row;
+    for(let x=0;x<GW;x++){
+      const c=row[x];
+      if('DRB'.includes(c)) doors.set(y*GW+x,{o:0,st:0,t:0,lock:c==='R'?'r':(c==='B'?'b':null)});
+      else if(c==='P'){ sx=x+0.5; sy=y+0.5; }
+      else if(c==='i'){ things.push(mkEnemy('imp',x+0.5,y+0.5)); totalKills++; }
+      else if(c==='p'){ things.push(mkEnemy('pinky',x+0.5,y+0.5)); totalKills++; }
+      else if(c==='b') things.push({kind:'barrel',x:x+0.5,y:y+0.5,hp:20,r:0.32,alive:true,flash:0,boom:false,boomT:0});
+      else if(c==='h') addItem('medkit',x,y),totalItems++;
+      else if(c==='f') addItem('stim',x,y),totalItems++;
+      else if(c==='m') addItem('armor',x,y),totalItems++;
+      else if(c==='c') addItem('clip',x,y),totalItems++;
+      else if(c==='s') addItem('shells',x,y),totalItems++;
+      else if(c==='G') addItem('shotgun',x,y),totalItems++;
+      else if(c==='g') addItem('chaingun',x,y),totalItems++;
+      else if(c==='k') addItem('keyR',x,y),totalItems++;
+      else if(c==='K') addItem('keyB',x,y),totalItems++;
+      else if(c==='x') things.push({kind:'lamp',x:x+0.5,y:y+0.5,r:0.25,alive:true,flash:0});
+    }
+  }
+  grid=rows;
+  const keepArmor=P?P.armor:0;
+  P={x:sx,y:sy,a:L.ang,hp:100,armor:keepArmor,keys:{r:false,b:false},
+     weapons:[true,true,false,false], ammo:{bul:50,shl:0},
+     dead:false,hurtT:0,nukT:0,bob:0};
+  // 出生点安全检查
+  if(hitWall(P.x,P.y,0.3)){
+    outer: for(let r=1;r<6;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const nx=sx+dx, ny=sy+dy;
+      if(!hitWall(nx,ny,0.3)){ P.x=nx; P.y=ny; break outer; }
+    }
+  }
+  if(!P.weapons[wCur]) wCur=1;
+  wRaise=1;
+  P.snap=JSON.stringify({hp:P.hp,armor:P.armor,w:P.weapons,a:{...P.ammo}});
+  msgBox(L.name,2.5);
+}
+function mkEnemy(type,x,y){
+  const imp=type==='imp';
+  return {kind:'enemy',type,x,y,r:imp?0.3:0.4,hp:imp?55:140,speed:imp?1.9:3.1,
+    state:'idle',dir:rnd()*6.28,animT:rnd()*10,atkT:1+rnd(),painT:0,flash:0,
+    alive:true,dieT:0,turnT:0,attackAnim:0,aiT:rnd()*0.2,canSee:false};
+}
+function cellAt(x,y){
+  if(x<0||y<0||x>=GW||y>=GH) return '1';
+  return grid[y][x];
+}
+function solidCell(x,y){
+  const c=cellAt(x,y);
+  if('12345S'.includes(c)) return true;
+  if('DRB'.includes(c)){ const d=doors.get(y*GW+x); return !d||d.o<0.75; }
+  return false;
+}
+function losBlocked(x0,y0,x1,y1){
+  const dx=x1-x0, dy=y1-y0, dist=Math.hypot(dx,dy);
+  if(dist<0.001) return false;
+  return rayWall(x0,y0,dx/dist,dy/dist,dist)!==null;
+}
+function rayWall(x0,y0,dx,dy,maxD){
+  let mx=floor(x0), my=floor(y0);
+  const ddx=Math.abs(1/(dx||1e-9)), ddy=Math.abs(1/(dy||1e-9));
+  let sx,sy,sdx,sdy,d=0;
+  if(dx<0){ sx=-1; sdx=(x0-mx)*ddx; } else { sx=1; sdx=(mx+1-x0)*ddx; }
+  if(dy<0){ sy=-1; sdy=(y0-my)*ddy; } else { sy=1; sdy=(my+1-y0)*ddy; }
+  for(let i=0;i<160;i++){
+    if(sdx<sdy){ mx+=sx; d=sdx; sdx+=ddx; } else { my+=sy; d=sdy; sdy+=ddy; }
+    if(d>maxD) return null;
+    const c=cellAt(mx,my);
+    if('12345S'.includes(c)) return d;
+    if('DRB'.includes(c)){ const dr=doors.get(my*GW+mx); if(!dr||dr.o<0.5) return d; }
+  }
+  return null;
+}
+
+// ---------- 碰撞移动 ----------
+function hitWall(x,y,r){
+  for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+    const cx=floor(x)+ox, cy=floor(y)+oy;
+    if(!solidCell(cx,cy)) continue;
+    const nx=clamp(x,cx,cx+1), ny=clamp(y,cy,cy+1);
+    if((x-nx)*(x-nx)+(y-ny)*(y-ny)<r*r) return true;
+  }
+  return false;
+}
+function moveBody(b,dx,dy){
+  const r=b.r;
+  const nx=b.x+dx;
+  if(!hitWall(nx,b.y,r)) b.x=nx;
+  const ny=b.y+dy;
+  if(!hitWall(b.x,ny,r)) b.y=ny;
+  for(const t of things){
+    if(t===b||!t.alive) continue;
+    if(t.kind==='enemy'&&t.state==='dead') continue;
+    const rr=r+t.r, ddx=b.x-t.x, ddy=b.y-t.y, d2=ddx*ddx+ddy*ddy;
+    if(d2<rr*rr&&d2>0.0001){
+      const d=Math.sqrt(d2), push=(rr-d)/d, f=b.kind==='enemy'?0.4:1;
+      b.x+=ddx*push*f; b.y+=ddy*push*f;
+    }
+  }
+  b.x=clamp(b.x,0.31,GW-0.31); b.y=clamp(b.y,0.31,GH-0.31);
+}
+
+// ---------- 战斗 ----------
+function fireHitscan(spread,range,dmg){
+  const a=P.a+(rnd()*2-1)*spread;
+  const dx=Math.cos(a), dy=Math.sin(a);
+  const wallD=rayWall(P.x,P.y,dx,dy,range)??range;
+  let best=null, bestD=1e9;
+  for(const t of things){
+    if(t.kind==='enemy'){ if(!t.alive) continue; }
+    else if(t.kind==='barrel'){ if(!t.alive) continue; }
+    else continue;
+    const ex=t.x-P.x, ey=t.y-P.y;
+    const along=ex*dx+ey*dy;
+    if(along<0.2||along>Math.min(wallD,range)) continue;
+    const perp=Math.abs(ex*dy-ey*dx);
+    if(perp<t.r+0.22+along*0.05&&along<bestD){ best=t; bestD=along; }
+  }
+  if(best){
+    if(best.kind==='enemy'){ damageEnemy(best,dmg); addFx('blood',P.x+dx*(bestD-0.2),P.y+dy*(bestD-0.2),0.45,false); }
+    else { best.hp-=dmg; best.flash=0.1; addFx('puff',P.x+dx*(bestD-0.2),P.y+dy*(bestD-0.2),0.4,false);
+      if(best.hp<=0) explodeBarrel(best); else sfx('hitwall'); }
+  } else if(wallD<range){
+    addFx('puff',P.x+dx*(wallD-0.08),P.y+dy*(wallD-0.08),0.42,false); sfx('hitwall');
+  }
+  wakeEnemies(8);
+}
+function damageEnemy(e,dmg){
+  if(!e.alive) return;
+  e.hp-=dmg; e.flash=0.15;
+  if(e.hp<=0){
+    e.alive=false; e.state='dead'; e.dieT=0; kills++;
+    sfx('edeath');
+    if(kills>=totalKills&&totalKills>0) msgBox('全部恶魔已消灭!',2);
+  } else if(rnd()<(e.type==='imp'?0.62:0.42)){
+    e.painT=0.32;
+  }
+  if(e.state==='idle'){ e.state='chase'; }
+}
+function wakeEnemies(rad){
+  for(const t of things){
+    if(t.kind==='enemy'&&t.alive&&t.state==='idle'){
+      const d=Math.hypot(t.x-P.x,t.y-P.y);
+      if(d<rad||(!losBlocked(P.x,P.y,t.x,t.y)&&d<14)){
+        t.state='chase'; if(d<11) sfx('sight');
+      }
+    }
+  }
+}
+function explodeBarrel(b){
+  if(!b.alive) return;
+  b.alive=false; b.boom=true; b.boomT=0;
+  sfx('boom'); shake=Math.max(shake,5); lightBoost=Math.max(lightBoost,0.5);
+  addFx('explo',b.x,b.y,0.5,true);
+  const hurt=(t,isP)=>{
+    const d=Math.hypot(t.x-b.x,t.y-b.y);
+    if(d<2.7){
+      const dm=(70*(1-d/2.9))|0;
+      if(isP) damagePlayer(dm);
+      else if(t.kind==='enemy') damageEnemy(t,dm);
+      else if(t.kind==='barrel'&&t.alive) setTimeout(()=>explodeBarrel(t),120+rnd()*120);
+    } };
+  hurt(P,true);
+  for(const t of things) if(t.kind==='enemy'||t.kind==='barrel') hurt(t,false);
+}
+function damagePlayer(dmg,direct){
+  if(P.dead) return;
+  if(cheatGod) return;
+  dmg=Math.max(1,dmg*DIFF[diff].dm|0);
+  if(P.armor>0&&!direct){ const ab=Math.min(P.armor,dmg/3|0); P.armor-=ab; dmg-=ab; }
+  P.hp-=dmg;
+  flashDmg=Math.min(0.55,flashDmg+dmg/40);
+  faceMood='ouch'; faceMoodT=0.7;
+  if(P.hp<=0){ P.hp=0; P.dead=true; deadT=0; sfx('pdeath'); }
+  else sfx('pain');
+}
+
+// ---------- 特效/火球 ----------
+function addFx(type,x,y,z0,bright){ fxs.push({type,x,y,z0,t:0,bright:!!bright}); }
+function spawnFireball(owner,x,y,tx,ty){
+  const d=Math.hypot(tx-x,ty-y)||1, sp=6.2;
+  projs.push({kind:'fireball',owner,x:x+(tx-x)/d*0.45,y:y+(ty-y)/d*0.45,
+    vx:(tx-x)/d*sp,vy:(ty-y)/d*sp,t:0});
+  sfx('fireball');
+}
+
+// ---------- 使用 ----------
+function tryUse(){
+  const dx=Math.cos(P.a), dy=Math.sin(P.a);
+  for(let k=0.4;k<=1.7;k+=0.4){
+    const cx=floor(P.x+dx*k), cy=floor(P.y+dy*k);
+    const c=cellAt(cx,cy);
+    if('DRB'.includes(c)){
+      const d=doors.get(cy*GW+cx); if(!d) continue;
+      if(d.lock==='r'&&!P.keys.r){ msgBox('需要 红色钥匙卡!'); sfx('lock'); return; }
+      if(d.lock==='b'&&!P.keys.b){ msgBox('需要 蓝色钥匙卡!'); sfx('lock'); return; }
+      if(d.st===0||d.st===3){ d.st=1; sfx('door'); }
+      return;
+    }
+    if(c==='S'){
+      sfx('switch');
+      document.exitPointerLock&&document.exitPointerLock();
+      showInter();
+      return;
+    }
+    if('12345'.includes(c)) return;
+  }
+}
+
+// ---------- AI（视线/攻击决策节流至约8Hz，移动每帧执行：性能优化） ----------
+function updateEnemy(e,dt){
+  if(e.kind!=='enemy') return;
+  e.animT+=dt;
+  if(!e.alive){ e.dieT+=dt; return; }
+  e.painT=Math.max(0,e.painT-dt);
+  if(e.painT>0) return;
+  const dP=Math.hypot(P.x-e.x,P.y-e.y);
+  if(e.state==='idle'){
+    e.aiT-=dt;
+    if(e.aiT<=0){
+      e.aiT=0.15+rnd()*0.1;
+      if(dP<11&&!P.dead&&!losBlocked(e.x,e.y,P.x,P.y)){ e.state='chase'; sfx('sight'); }
+    }
+    return;
+  }
+  if(P.dead) return;
+  e.atkT-=dt; e.turnT-=dt;
+  e.aiT-=dt;
+  if(e.aiT<=0){
+    e.aiT=0.12+rnd()*0.08;
+    e.canSee=!losBlocked(e.x,e.y,P.x,P.y);
+    if(e.atkT<=0&&e.canSee){
+      if(e.type==='imp'){
+        if(dP<1.4){ damagePlayer(3+rnd()*10|0); e.atkT=1.1*DIFF[diff].cd; e.attackAnim=0.3; }
+        else if(dP<11){ spawnFireball(e,e.x,e.y,P.x,P.y); e.atkT=(1.3+rnd()*0.9)*DIFF[diff].cd; e.attackAnim=0.35; }
+      } else {
+        if(dP<1.25){ damagePlayer(5+rnd()*18|0); e.atkT=0.85*DIFF[diff].cd; e.attackAnim=0.4; }
+      }
+    }
+  }
+  let mvx,mvy;
+  if(e.canSee){
+    const ang=Math.atan2(P.y-e.y,P.x-e.x);
+    e.dir=ang+Math.sin(e.animT*2.2+e.x)*0.25;
+    mvx=Math.cos(e.dir); mvy=Math.sin(e.dir);
+  } else {
+    if(e.turnT<=0){ e.dir=rnd()*6.28; e.turnT=0.5+rnd(); }
+    mvx=Math.cos(e.dir)*0.6; mvy=Math.sin(e.dir)*0.6;
+  }
+  const spd=e.speed*DIFF[diff].sp;
+  const ox=e.x, oy=e.y;
+  moveBody(e,mvx*spd*dt,mvy*spd*dt);
+  if(Math.hypot(e.x-ox,e.y-oy)<spd*dt*0.25&&e.turnT<=0){ e.dir+=rnd()*3-1.5; e.turnT=0.4; }
+  if(e.attackAnim>0) e.attackAnim-=dt;
+}
+
+// ---------- 门 ----------
+function updateDoors(dt){
+  for(const [k,d] of doors){
+    if(d.st===1){ d.o+=dt/0.7; if(d.o>=1){ d.o=1; d.st=2; d.t=0; } }
+    else if(d.st===2){
+      d.t+=dt;
+      const dx=k%GW+0.5, dy=floor(k/GW)+0.5;
+      let occupied=Math.hypot(P.x-dx,P.y-dy)<1;
+      for(const t of things) if(t.kind==='enemy'&&t.alive&&Math.hypot(t.x-dx,t.y-dy)<1) occupied=true;
+      if(d.t>3.5&&!occupied){ d.st=3; sfx('door'); }
+    }
+    else if(d.st===3){ d.o-=dt/0.7; if(d.o<=0){ d.o=0; d.st=0; } }
+  }
+}
+
+// ---------- 拾取 ----------
+function tryPickup(){
+  for(const t of things){
+    if(!t.alive) continue;
+    const kinds=['medkit','stim','armor','clip','shells','shotgun','chaingun','keyR','keyB'];
+    if(!kinds.includes(t.kind)) continue;
+    if(Math.hypot(t.x-P.x,t.y-P.y)>0.55) continue;
+    let took=true, m='';
+    switch(t.kind){
+      case 'medkit': if(P.hp>=100){took=false;break;} P.hp=Math.min(100,P.hp+25); m='拾取 医疗包 +25'; break;
+      case 'stim': if(P.hp>=100){took=false;break;} P.hp=Math.min(100,P.hp+10); m='拾取 兴奋剂 +10'; break;
+      case 'armor': if(P.armor>=100){took=false;break;} P.armor=100; m='拾取 护甲!'; break;
+      case 'clip': if(P.ammo.bul>=200){took=false;break;} P.ammo.bul=Math.min(200,P.ammo.bul+10); m='拾取 弹夹 +10'; break;
+      case 'shells': if(P.ammo.shl>=50){took=false;break;} P.ammo.shl=Math.min(50,P.ammo.shl+4); m='拾取 霰弹 +4'; break;
+      case 'shotgun':
+        if(!P.weapons[2]){ P.weapons[2]=true; m='获得 霰弹枪!'; faceMood='grin'; faceMoodT=1.2; sfx('wpick'); switchBest(); }
+        else if(P.ammo.shl<50){ P.ammo.shl=Math.min(50,P.ammo.shl+4); m='霰弹 +4'; }
+        else took=false;
+        break;
+      case 'chaingun':
+        if(!P.weapons[3]){ P.weapons[3]=true; P.ammo.bul=Math.min(200,P.ammo.bul+40); m='获得 转管机枪!'; faceMood='grin'; faceMoodT=1.2; sfx('wpick'); switchBest(); }
+        else if(P.ammo.bul<200){ P.ammo.bul=Math.min(200,P.ammo.bul+10); m='弹夹 +10'; }
+        else took=false;
+        break;
+      case 'keyR': P.keys.r=true; m='获得 红色钥匙卡!'; sfx('key'); break;
+      case 'keyB': P.keys.b=true; m='获得 蓝色钥匙卡!'; sfx('key'); break;
+    }
+    if(took){
+      t.alive=false; itemsGot++;
+      if(t.kind!=='keyR'&&t.kind!=='keyB'&&!m.includes('获得')) sfx('pickup');
+      flashPick=Math.min(0.3,flashPick+0.15);
+      if(m) msgBox(m,1.6);
+    }
+  }
+}
+function ammoOf(w){ const a=WEAPONS[w].ammo; return a?P.ammo[a]:1; }
+function switchBest(){
+  if(P.weapons[3]&&P.ammo.bul>0) wCur=3;
+  else if(P.weapons[2]&&P.ammo.shl>0) wCur=2;
+  wRaise=1;
+}
+function selWpn(w){
+  if(!P||!P.weapons[w]||w===wCur) return;
+  if(w!==0&&ammoOf(w)<=0){ msgBox('弹药耗尽!'); return; }
+  wCur=w; wRaise=1;
+}
+
+// ---------- 输入 ----------
+addEventListener('keydown',e=>{
+  if(['Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys[e.code]=true;
+  if(e.code==='KeyE'||e.code==='Space') useEdge=true;
+  if(e.code==='Tab') mapOn=!mapOn;
+  if(e.code==='KeyM'){ musicOn=!musicOn; msgBox(musicOn?'音乐: 开':'音乐: 关',1); }
+  if(e.code==='Escape'){ if(state==='play') pauseGame(); else if(state==='pause') resumeGame(); }
+  if(e.code==='KeyF') toggleFull();
+  if(state==='play'){
+    if(e.code==='Digit1') selWpn(0);
+    if(e.code==='Digit2') selWpn(1);
+    if(e.code==='Digit3') selWpn(2);
+    if(e.code==='Digit4') selWpn(3);
+    if(/^Key[IKDQFA]$/.test(e.code)){
+      cheatBuf=(cheatBuf+e.code[3]).slice(-5);
+      if(cheatBuf.endsWith('IDDQD')){ cheatGod=!cheatGod; msgBox(cheatGod?'无敌模式 ON!':'无敌模式 OFF'); }
+      if(cheatBuf.endsWith('IDKFA')){ P.weapons=[true,true,true,true]; P.ammo.bul=200; P.ammo.shl=50; P.armor=100; P.keys.r=P.keys.b=true; msgBox('全部武器弹药!'); }
+    }
+  }
+});
+addEventListener('keyup',e=>{ keys[e.code]=false; });
+let plocked=false;
+cv.addEventListener('mousedown',()=>{
+  initAudio(); AC&&AC.resume&&AC.resume();
+  if(state==='play'&&!touchMode){
+    if(!plocked&&cv.requestPointerLock) cv.requestPointerLock();
+    mouseFire=true;
+  }
+});
+addEventListener('mouseup',()=>{ mouseFire=false; });
+addEventListener('mousemove',e=>{ if(plocked&&state==='play'&&P) P.a+=e.movementX*0.0026; });
+document.addEventListener('pointerlockchange',()=>{ plocked=document.pointerLockElement===cv; });
+addEventListener('wheel',e=>{
+  if(state!=='play'||!P) return;
+  const dir=e.deltaY>0?1:-1;
+  for(let i=1;i<=4;i++){
+    const w=(wCur+dir*i+8)%4;
+    if(P.weapons[w]&&(w===0||ammoOf(w)>0)){ selWpn(w); break; }
+  }
+},{passive:true});
+
+// 触屏
+let stickId=null, stickCX=0, stickCY=0, lookId=null, lookX=0;
+let tMoveX=0, tMoveY=0, tFire=false;
+function setupTouch(){
+  if(!touchMode) return;
+  document.getElementById('touchUI').style.display='block';
+  const base=document.getElementById('stickBase'), knob=document.getElementById('stickKnob');
+  const wrap=document.getElementById('wrap');
+  wrap.addEventListener('touchstart',e=>{
+    initAudio(); AC&&AC.resume&&AC.resume();
+    let used=false;
+    for(const t of e.changedTouches){
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      if(el&&el.closest&&el.closest('.tbtn,#ovl')) continue; // 不吞掉按钮/菜单的点击
+      if(t.clientX<innerWidth*0.45&&stickId===null){
+        stickId=t.identifier;
+        base.style.left=(t.clientX-48)+'px'; base.style.top=(t.clientY-48)+'px'; base.style.bottom='auto';
+        stickCX=t.clientX; stickCY=t.clientY;
+        used=true;
+      } else if(lookId===null){ lookId=t.identifier; lookX=t.clientX; used=true; }
+    }
+    if(used) e.preventDefault();
+  },{passive:false});
+  wrap.addEventListener('touchmove',e=>{
+    let used=false;
+    for(const t of e.changedTouches){
+      if(t.identifier===stickId){
+        const dx=clamp((t.clientX-stickCX)/42,-1,1), dy=clamp((t.clientY-stickCY)/42,-1,1);
+        tMoveX=dx; tMoveY=dy;
+        knob.style.left=(26+dx*26)+'px'; knob.style.top=(26+dy*26)+'px';
+        used=true;
+      } else if(t.identifier===lookId&&state==='play'&&P){
+        P.a+=(t.clientX-lookX)*0.005; lookX=t.clientX; used=true;
+      }
+    }
+    if(used) e.preventDefault();
+  },{passive:false});
+  const endT=e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===stickId){
+        stickId=null; tMoveX=0; tMoveY=0;
+        base.style.left='26px'; base.style.top='auto'; base.style.bottom='26px';
+        knob.style.left='26px'; knob.style.top='26px';
+      }
+      if(t.identifier===lookId) lookId=null;
+    }
+  };
+  wrap.addEventListener('touchend',endT);
+  wrap.addEventListener('touchcancel',endT);
+  const bind=(id,down,up)=>{
+    const el=document.getElementById(id);
+    el.addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); down(); },{passive:false});
+    el.addEventListener('touchend',e=>{ e.preventDefault(); e.stopPropagation(); up&&up(); },{passive:false});
+  };
+  bind('btnFire',()=>{ tFire=true; },()=>{ tFire=false; });
+  bind('btnUse',()=>{ useEdge=true; });
+  bind('btnWpn',()=>{ if(!P) return;
+    for(let i=1;i<=4;i++){ const w=(wCur+i)%4; if(P.weapons[w]&&(w===0||ammoOf(w)>0)){ selWpn(w); break; } } });
+  bind('btnPauseT',()=>{ if(state==='play') pauseGame(); });
+}
+
+// ---------- 玩家更新 ----------
+function updatePlayer(dt){
+  if(P.dead) return;
+  let fwd=0, str=0, turn=0;
+  if(keys['KeyW']||keys['ArrowUp']) fwd+=1;
+  if(keys['KeyS']||keys['ArrowDown']) fwd-=1;
+  if(keys['KeyA']) str-=1;
+  if(keys['KeyD']) str+=1;
+  if(keys['ArrowLeft']) turn-=1;
+  if(keys['ArrowRight']) turn+=1;
+  fwd+=-tMoveY; str+=tMoveX;
+  P.a+=turn*2.8*dt;
+  const run=(keys['ShiftLeft']||keys['ShiftRight']||touchMode)?1.5:1;
+  const spd=3.4*run;
+  const dx=Math.cos(P.a), dy=Math.sin(P.a);
+  let mx=(dx*fwd-dy*str)*spd*dt, my=(dy*fwd+dx*str)*spd*dt;
+  const mlen=Math.hypot(mx,my), maxM=spd*dt*1.42;
+  if(mlen>maxM&&mlen>0){ mx*=maxM/mlen; my*=maxM/mlen; }
+  moveBody(P,mx,my);
+  if(mlen>0.001) P.bob+=dt*9;
+  const c=cellAt(floor(P.x),floor(P.y));
+  if(c==='~'){ P.nukT-=dt; if(P.nukT<=0){ P.nukT=0.8; damagePlayer(5,true); sfx('nukage'); } }
+  else P.nukT=Math.min(P.nukT,0.3);
+  wTimer-=dt;
+  const wantFire=mouseFire||tFire||keys['ControlLeft']||keys['ControlRight'];
+  if(wantFire&&wTimer<=0&&!mapOn){
+    const wp=WEAPONS[wCur];
+    if(wp.ammo&&P.ammo[wp.ammo]<=0){
+      sfx('empty');
+      let alt=0;
+      if(P.weapons[2]&&P.ammo.shl>0) alt=2;
+      else if(P.weapons[3]&&P.ammo.bul>0) alt=3;
+      else if(P.ammo.bul>0) alt=1;
+      if(alt!==wCur){ wCur=alt; wRaise=1; }
+      wTimer=0.3;
+    } else {
+      if(wp.ammo) P.ammo[wp.ammo]--;
+      wp.use();
+      wTimer=wp.rate;
+      lightBoost=Math.max(lightBoost,wCur===2?0.45:0.3);
+      wPrevFireT=0.1;
+    }
+  }
+  if(useEdge){ useEdge=false; tryUse(); }
+  // 准心交互提示：面向门/开关时变黄
+  P.useHint=false;
+  {
+    const hdx=Math.cos(P.a), hdy=Math.sin(P.a);
+    for(let k=0.4;k<=1.7;k+=0.4){
+      const hc=cellAt(floor(P.x+hdx*k),floor(P.y+hdy*k));
+      if('DRBS'.includes(hc)){ P.useHint=true; break; }
+      if('12345'.includes(hc)) break;
+    }
+  }
+  tryPickup();
+}
+
+// ---------- 主更新 ----------
+let slimeF=0, slimeT=0;
+function update(dt){
+  if(state!=='play') return;
+  lvlTime+=dt; totalTime+=dt;
+  shake=Math.max(0,shake-dt*14);
+  lightBoost=Math.max(0,lightBoost-dt*3.2);
+  flashDmg=Math.max(0,flashDmg-dt*1.4);
+  flashPick=Math.max(0,flashPick-dt*2.2);
+  faceT-=dt; if(faceT<=0){ faceT=1.2+rnd()*2; faceDir=floor(rnd()*3)-1; }
+  if(faceMoodT>0){ faceMoodT-=dt; if(faceMoodT<=0) faceMood='n'; }
+  wRaise=Math.max(0,wRaise-dt*5);
+  slimeT+=dt; if(slimeT>0.4){ slimeT=0; slimeF^=1; }
+  for(const t of things) if(t.flash>0) t.flash-=dt;
+  if(P.dead){
+    deadT+=dt;
+    if(deadT>1.3&&!ovlVisible()) showDead();
+    schedMusic();
+    return;
+  }
+  updatePlayer(dt);
+  updateDoors(dt);
+  for(const t of things) updateEnemy(t,dt);
+  for(let i=projs.length-1;i>=0;i--){
+    const p=projs[i]; p.t+=dt;
+    let dead=false;
+    for(let s=0;s<2&&!dead;s++){
+      p.x+=p.vx*dt/2; p.y+=p.vy*dt/2;
+      if(solidCell(floor(p.x),floor(p.y))){ dead=true; break; }
+      if(!P.dead&&Math.hypot(p.x-P.x,p.y-P.y)<0.42){ damagePlayer(8+rnd()*16|0); dead=true; break; }
+      for(const t of things){
+        if(t.kind==='barrel'&&t.alive&&Math.hypot(p.x-t.x,p.y-t.y)<0.4){
+          t.hp-=20; if(t.hp<=0) explodeBarrel(t); dead=true; break; }
+        if(t.kind==='enemy'&&t.alive&&t!==p.owner&&Math.hypot(p.x-t.x,p.y-t.y)<0.35){
+          damageEnemy(t,8); dead=true; break; }
+      }
+    }
+    if(dead){ addFx('explo',p.x,p.y,0.42,true); sfx('hitwall'); projs.splice(i,1); }
+    else if(p.t>4) projs.splice(i,1);
+  }
+  for(let i=fxs.length-1;i>=0;i--){
+    const f=fxs[i]; f.t+=dt;
+    const dur=f.type==='explo'?0.42:(f.type==='blood'?0.3:0.26);
+    if(f.t>dur) fxs.splice(i,1);
+  }
+  for(const t of things) if(t.kind==='barrel'&&!t.alive&&t.boom){ t.boomT+=dt; if(t.boomT>0.45) t.boom=false; }
+  schedMusic();
+}
+
+// ---------- 渲染：世界 ----------
+function lightAt(d){ const s=1.28-d*0.072; return clamp(s,0.12,1)+lightBoost; }
+function renderWorld(){
+  const dirX=Math.cos(P.a), dirY=Math.sin(P.a);
+  const plX=-dirY*FOVK, plY=dirX*FOVK;
+  const hor=HORIZON+Math.sin(P.bob)*2.2+(shake?((rnd()*2-1)*shake)|0:0);
+  const px=P.x, py=P.y;
+  const rdx0=dirX-plX, rdy0=dirY-plY, rdx1=dirX+plX, rdy1=dirY+plY;
+  const skyOn=LEVELS[lvlIdx].sky;
+  // 天花板 + 地板
+  for(let y=0;y<VIEWH;y++){
+    const isFloor=y>hor;
+    const denom=isFloor?(y-hor):(hor-y);
+    const rowD=denom>0.5?HORIZON/denom:999;
+    if(rowD>40){
+      const c=rgb(10,10,12);
+      for(let x=0;x<W;x++) FB[y*W+x]=c;
+      continue;
+    }
+    let fx=px+rowD*rdx0, fy=py+rowD*rdy0;
+    const stx=rowD*(rdx1-rdx0)/W, sty=rowD*(rdy1-rdy0)/W;
+    const lv=clamp(lightAt(rowD)*10|0,0,SHN-1);
+    let shT=null, shA=null;
+    for(let x=0;x<W;x++){
+      const cx=floor(fx), cy=floor(fy);
+      const cell=cellAt(cx,cy);
+      let c;
+      if(!isFloor&&skyOn&&cell==='o'){
+        const g=clamp(y/(hor+1)*200+30,0,220)|0;
+        c=rgb(g*0.5|0,g*0.55|0,g*0.9|0);
+        if(((x*73+y*151)%1021)<2) c=rgb(230,230,255);
+      } else {
+        const tex=isFloor?(cell==='~'?(slimeF?TEX.lavaB:TEX.lavaA):(cell==='o'?THEME.out:THEME.floor))
+                         :THEME.ceil;
+        if(tex!==shT){ shT=tex; shA=shadedTex(tex,lv); }
+        c=shA[(((fy*TS)|0)&63)*TS+(((fx*TS)|0)&63)];
+      }
+      FB[y*W+x]=c;
+      fx+=stx; fy+=sty;
+    }
+  }
+  // 墙体
+  for(let x=0;x<W;x++){
+    const camX=2*x/W-1;
+    const rdx=dirX+plX*camX, rdy=dirY+plY*camX;
+    let mx=floor(px), my=floor(py);
+    const ddx=Math.abs(1/(rdx||1e-9)), ddy=Math.abs(1/(rdy||1e-9));
+    let stx,sty,sdx,sdy;
+    if(rdx<0){ stx=-1; sdx=(px-mx)*ddx; } else { stx=1; sdx=(mx+1-px)*ddx; }
+    if(rdy<0){ sty=-1; sdy=(py-my)*ddy; } else { sty=1; sdy=(my+1-py)*ddy; }
+    let side=0, d=0, tex=null, texX=0, hit=false;
+    for(let i=0;i<160&&!hit;i++){
+      if(sdx<sdy){ mx+=stx; d=sdx; sdx+=ddx; side=0; } else { my+=sty; d=sdy; sdy+=ddy; side=1; }
+      const c=cellAt(mx,my);
+      if('12345S'.includes(c)){
+        hit=true;
+        tex=c==='1'?TEX.t1:c==='2'?TEX.t2:c==='3'?TEX.t3:c==='4'?TEX.t4:c==='5'?TEX.t5:TEX.exit;
+        let wallX=side===0?py+d*rdy:px+d*rdx; wallX-=floor(wallX);
+        texX=wallX;
+      } else if('DRB'.includes(c)){
+        const dr=doors.get(my*GW+mx);
+        const open=dr?dr.o:0;
+        let wallX=side===0?py+d*rdy:px+d*rdx; wallX-=floor(wallX);
+        if(wallX>=open&&open<1){
+          hit=true;
+          tex=c==='D'?TEX.door:c==='R'?TEX.doorR:TEX.doorB;
+          texX=wallX-open;
+        }
+      }
+    }
+    if(!hit){ zbuf[x]=100; continue; }
+    zbuf[x]=d;
+    const lineH=VIEWH/d;
+    const y0=hor-lineH/2, y1=hor+lineH/2;
+    let u=(texX*TS)|0;
+    if(side===0&&rdx>0) u=TS-1-u;
+    if(side===1&&rdy<0) u=TS-1-u;
+    const tStep=TS/lineH;
+    let tPos=(Math.max(0,y0|0)-y0)*tStep;
+    const ys=Math.max(0,y0|0), ye=Math.min(VIEWH,y1|0);
+    let s=lightAt(d)*(side?0.72:1);
+    const stex=shadedTex(tex,clamp(s*10|0,0,SHN-1));
+    for(let y=ys;y<ye;y++){
+      const v=tPos|0; tPos+=tStep;
+      FB[y*W+x]=stex[(v>63?63:v)*TS+u];
+    }
+  }
+  return hor;
+}
+
+// ---------- 渲染：精灵 ----------
+function renderSprites(hor){
+  const dirX=Math.cos(P.a), dirY=Math.sin(P.a);
+  const plX=-dirY*FOVK, plY=dirX*FOVK;
+  const invDet=1/(plX*dirY-dirX*plY);
+  const list=[];
+  const push=(x,y,z0,hW,spr,opt)=>{
+    const dx=x-P.x, dy=y-P.y;
+    const tX=invDet*(dirY*dx-dirX*dy);
+    const tY=invDet*(-plY*dx+plX*dy);
+    if(tY<0.1) return;
+    const sx=(W/2)*(1+tX/tY);
+    const h=hW*VIEWH/tY;
+    const ww=hW*(spr.w/spr.h)*WS/tY;
+    if(sx+ww/2<0||sx-ww/2>=W) return;
+    list.push({tY,sx,h,ww,spr,z0,flash:opt.flash||0,bright:!!opt.bright});
+  };
+  for(const t of things){
+    if(t.kind==='enemy'){
+      const set=t.type==='imp'?SPR.imp:SPR.pinky;
+      let fr;
+      if(!t.alive) fr=set[4+Math.min(2,floor(t.dieT/0.13))];
+      else if(t.painT>0) fr=set[3];
+      else if(t.attackAnim>0) fr=set[2];
+      else if(t.state==='chase') fr=set[floor(t.animT*4)%2];
+      else fr=set[0];
+      push(t.x,t.y,0,t.type==='imp'?0.74:0.64,fr,{flash:t.flash});
+    } else if(t.kind==='barrel'){
+      if(t.alive) push(t.x,t.y,0,0.55,SPR.barrel,{flash:t.flash});
+      else if(t.boom) push(t.x,t.y,0.1,0.9,SPR.explo[Math.min(3,floor(t.boomT/0.11))],{bright:true});
+    } else if(t.kind==='lamp'){
+      push(t.x,t.y,0,0.85,SPR.lamp,{bright:true});
+    } else if(t.alive){
+      const m={medkit:SPR.medkit,stim:SPR.stim,armor:SPR.armor,clip:SPR.clip,shells:SPR.shells,
+        shotgun:SPR.shotgun,chaingun:SPR.chaingun,keyR:SPR.keyR,keyB:SPR.keyB}[t.kind];
+      const hh={medkit:0.24,stim:0.18,armor:0.3,clip:0.16,shells:0.16,shotgun:0.2,chaingun:0.24,keyR:0.3,keyB:0.3}[t.kind];
+      if(m) push(t.x,t.y,0,hh,m,{});
+    }
+  }
+  for(const p of projs) push(p.x,p.y,0.38,0.22,SPR.fireball[floor(p.t*10)%2],{bright:true});
+  for(const f of fxs){
+    const dur=f.type==='explo'?0.42:(f.type==='blood'?0.3:0.26);
+    const fr=clamp(floor(f.t/dur*3),0,2);
+    const spr=f.type==='explo'?SPR.explo[clamp(floor(f.t/dur*4),0,3)]:f.type==='blood'?SPR.blood[fr]:SPR.puff[fr];
+    const size=f.type==='explo'?0.8:(f.type==='blood'?0.3:0.26);
+    push(f.x,f.y,f.z0,size,spr,{bright:f.bright});
+  }
+  list.sort((a,b)=>b.tY-a.tY);
+  for(const s of list){
+    const top=hor+(0.5-s.z0)*VIEWH/s.tY-s.h;
+    const x0=Math.max(0,(s.sx-s.ww/2)|0), x1=Math.min(W-1,(s.sx+s.ww/2)|0);
+    const y0=Math.max(0,top|0), y1=Math.min(VIEWH-1,(top+s.h)|0);
+    if(x1<x0||y1<y0) continue;
+    const light=s.bright?1.1:lightAt(s.tY);
+    for(let x=x0;x<=x1;x++){
+      if(zbuf[x]<=s.tY) continue;
+      const u=clamp(((x-(s.sx-s.ww/2))/s.ww*s.spr.w)|0,0,s.spr.w-1);
+      for(let y=y0;y<=y1;y++){
+        const v=clamp(((y-top)/s.h*s.spr.h)|0,0,s.spr.h-1);
+        const c=s.spr.data[v*s.spr.w+u];
+        if(!(c>>>24)) continue;
+        let col=shadeC(c,light);
+        if(s.flash>0) col=rgb(((col&255)*0.45+140)|0,((col>>8)&255)*0.4|0,((col>>16)&255)*0.4|0);
+        FB[y*W+x]=col;
+      }
+    }
+  }
+}
+
+// ---------- 渲染：武器 ----------
+function drawWeapon(){
+  if(P.dead) return;
+  const raise=wRaise*70;
+  const bx=Math.sin(P.bob)*9, by=Math.abs(Math.cos(P.bob))*7+raise;
+  const cx=W/2+bx|0, base=VIEWH-14+by|0;
+  const r=(x,y,w,h,c)=>{ for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+    const px=cx+x+i, py=base+y+j;
+    if(px>=0&&px<W&&py>=0&&py<VIEWH) FB[py*W+px]=c; } };
+  const firing=wPrevFireT>0;
+  const skin=rgb(224,172,128), sleeve=rgb(58,96,52), gun=rgb(96,98,106), gunD=rgb(58,60,66);
+  const flash=(fx,fy)=>{
+    r(fx-8,fy+6,16,8,rgb(255,220,80));
+    r(fx-5,fy,10,8,rgb(255,250,180));
+    r(fx-12,fy+8,24,4,rgb(255,150,40));
+  };
+  if(wCur===0){
+    const punch=wTimer>WEAPONS[0].rate*0.55?-26:0;
+    r(-14,-46+punch,26,26,skin); r(-10,-52+punch,18,10,skin);
+    r(-12,-50+punch,6,3,rgb(180,128,90));
+    r(-18,-24+punch,30,26,sleeve); r(-18,-24+punch,4,26,rgb(44,74,40));
+  } else if(wCur===1){
+    const rec=firing?7:0;
+    r(-8,-40+rec,16,12,gun); r(-6,-46+rec,12,8,gunD);
+    r(-4,-52+rec,8,8,rgb(120,124,132));
+    r(-12,-30,20,32,skin); r(-12,-30,20,6,rgb(190,140,100));
+    r(-14,-6,26,10,sleeve);
+    if(firing) flash(0,-58+rec);
+  } else if(wCur===2){
+    const pump=firing&&wTimer>0.55?10:0;
+    r(-10,-78,20,44,gun); r(-8,-84,16,8,gunD);
+    r(-6,-92,12,10,rgb(70,72,80));
+    r(-16,-56-pump,30,12,rgb(130,86,42)); r(-16,-56-pump,30,3,rgb(160,110,56));
+    r(-20,-46,36,30,skin); r(-24,-20,44,24,sleeve);
+    if(firing&&wTimer>0.75) flash(0,-100);
+  } else {
+    const spin=firing?(wTimer*40|0)%3:0;
+    for(let i=0;i<3;i++){
+      const yy=-86+((i*7+spin*7)%21);
+      r(-13+(i-1)*3,yy,7,52,i===spin?rgb(130,132,140):gunD);
+    }
+    r(-20,-40,40,20,rgb(88,90,98)); r(-20,-40,40,4,rgb(120,122,130));
+    r(-14,-24,28,26,skin);
+    r(-22,0,44,8,sleeve);
+    if(firing) flash(0,-96);
+  }
+}
+
+// ---------- 渲染：HUD ----------
+let hudBG=null;
+function buildHud(){
+  hudBG=new Uint32Array(W*HUDH);
+  for(let y=0;y<HUDH;y++)for(let x=0;x<W;x++){
+    const v=88+(y===0?26:(y===HUDH-1?-34:0));
+    const n=(vnoise(x/11,y/9)-0.5)*14;
+    let c=rgb(v+n|0,v+2+n|0,v+6+n|0);
+    if(y===0) c=rgb(150,152,158);
+    if(y===HUDH-1) c=rgb(30,32,36);
+    hudBG[y*W+x]=c;
+  }
+  for(let x=8;x<W;x+=36)for(let y=3;y<HUDH-3;y+=12){ hudBG[y*W+x]=rgb(150,152,158); hudBG[(y+1)*W+x]=rgb(50,52,56); }
+  const box=(x,w)=>{
+    for(let y=2;y<HUDH-2;y++){ hudBG[y*W+x]=rgb(40,42,46); hudBG[y*W+x+w]=rgb(40,42,46); }
+    for(let x2=x;x2<=x+w;x2++){ hudBG[2*W+x2]=rgb(40,42,46); hudBG[(HUDH-3)*W+x2]=rgb(40,42,46); } };
+  box(2,60); box(64,62); box(128,20); box(186,66); box(254,64);
+  const t=(s,x,y)=>drawTiny(hudBG,x,y,s,rgb(180,182,188),1);
+  t('AMMO',12,24); t('HEALTH',72,24); t('ARMS',130,24); t('ARMOR',196,24); t('KEYS',264,24);
+}
+function drawNum(fb,x,y,val,color,shadow){
+  const s=String(val);
+  const w=tinyWidth(s,2);
+  drawTiny(fb,x+(34-w)/2|0,y+2,s,shadow,2);
+  drawTiny(fb,x+(34-w)/2|0,y,s,color,2);
+}
+function renderHud(){
+  for(let y=0;y<HUDH;y++)for(let x=0;x<W;x++) FB[(VIEWH+y)*W+x]=hudBG[y*W+x];
+  const red=rgb(255,60,30), dred=rgb(90,10,4), yel=rgb(255,220,60);
+  const wp=WEAPONS[wCur];
+  drawNum(FB,4,4+VIEWH,wp.ammo?P.ammo[wp.ammo]:'-',red,dred);
+  let hc=red;
+  if(P.hp<=25) hc=(lvlTime*3|0)%2?yel:red;
+  drawNum(FB,66,4+VIEWH,P.hp+'%',hc,dred);
+  for(let i=1;i<=4;i++){
+    const owned=P.weapons[i-1]||i===1;
+    drawTiny(FB,131+(i-1)*5,6+VIEWH,''+i,wCur===i-1?yel:(owned?rgb(200,80,50):rgb(70,72,76)),1);
+  }
+  const fIdx=P.dead?17:faceMood==='grin'?15:faceMood==='ouch'?16:(4-clamp(floor(P.hp/20.01),0,4))*3+(faceDir+1);
+  const face=FACES[fIdx];
+  for(let y=0;y<face.h;y++)for(let x=0;x<face.w;x++){
+    const c=face.data[y*face.w+x]; if(!(c>>>24)) continue;
+    FB[(VIEWH+1+y)*W+(151+x)]=c;
+  }
+  drawNum(FB,188,4+VIEWH,P.armor+'%',red,dred);
+  drawTiny(FB,262,5+VIEWH,'R',P.keys.r?rgb(255,60,50):rgb(90,32,28),2);
+  drawTiny(FB,284,5+VIEWH,'B',P.keys.b?rgb(90,130,255):rgb(28,36,82),2);
+  drawTiny(FB,256,18+VIEWH,'BUL',rgb(140,142,148),1);
+  drawTiny(FB,284,18+VIEWH,''+P.ammo.bul,rgb(220,160,60),1);
+  drawTiny(FB,256,25+VIEWH,'SHL',rgb(140,142,148),1);
+  drawTiny(FB,284,25+VIEWH,''+P.ammo.shl,rgb(220,160,60),1);
+}
+
+// ---------- 自动地图 ----------
+function renderMap(){
+  const sc=7, ox=W/2-P.x*sc, oy=VIEWH/2-P.y*sc;
+  const put=(x,y,c)=>{ if(x>=0&&x<W&&y>=0&&y<VIEWH) FB[y*W+x]=c; };
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const c=cellAt(x,y);
+    const solid='12345S'.includes(c), door='DRB'.includes(c);
+    if(!solid&&!door) continue;
+    const wx=(ox+x*sc)|0, wy=(oy+y*sc)|0;
+    if(wx<-sc||wy<-sc||wx>W||wy>VIEWH) continue;
+    let col=rgb(110,190,110);
+    if(door) col=c==='D'?rgb(220,200,80):c==='R'?rgb(255,70,60):rgb(90,130,255);
+    if(c==='S') col=rgb(255,220,60);
+    for(let i=0;i<=sc;i++){ put(wx+i,wy,col); put(wx+i,wy+sc,col); }
+    for(let j=0;j<=sc;j++){ put(wx,wy+j,col); put(wx+sc,wy+j,col); }
+  }
+  const pax=(ox+P.x*sc)|0, pay=(oy+P.y*sc)|0;
+  for(let i=0;i<5;i++) put(pax+Math.cos(P.a)*i|0,pay+Math.sin(P.a)*i|0,rgb(255,240,80));
+  drawTiny(FB,6,VIEWH-9,'TAB MAP',rgb(200,200,140),1);
+}
+
+// ---------- 渲染主入口 ----------
+function render(){
+  if(state==='title') renderTitle();
+  else if(P){
+    const hor=renderWorld();
+    if(!mapOn) renderSprites(hor);
+    drawWeapon();
+    if(flashDmg>0||flashPick>0){
+      const a=Math.max(flashDmg,flashPick);
+      const isDmg=flashDmg>=flashPick;
+      for(let y=0;y<VIEWH;y++)for(let x=0;x<W;x++){
+        const c=FB[y*W+x];
+        FB[y*W+x]=isDmg
+          ? rgb((c&255)*(1-a)+185*a|0,((c>>8)&255)*(1-a)*0.8|0,((c>>16)&255)*(1-a)*0.8|0)
+          : rgb((c&255)*(1-a)+200*a|0,((c>>8)&255)*(1-a)+170*a|0,((c>>16)&255)*(1-a)*0.7|0);
+      }
+    }
+    if(P.dead){
+      const a=Math.min(0.55,deadT*0.5);
+      for(let y=0;y<VIEWH;y++)for(let x=0;x<W;x++){
+        const c=FB[y*W+x];
+        FB[y*W+x]=rgb((c&255)*(1-a)+120*a|0,((c>>8)&255)*(1-a)*0.3|0,((c>>16)&255)*(1-a)*0.3|0);
+      }
+    } else if(!mapOn){
+      const chc=P.useHint?rgb(255,220,60):rgb(255,255,255);
+      FB[(VIEWH/2)*W+(W/2)]=chc;
+      FB[(VIEWH/2)*W+(W/2)+1]=chc;
+      FB[(VIEWH/2+1)*W+(W/2)]=chc;
+      FB[(VIEWH/2+1)*W+(W/2)+1]=chc;
+    }
+    renderHud();
+    if(mapOn) renderMap();
+    if(state==='pause'){
+      for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const c=FB[y*W+x];
+        FB[y*W+x]=rgb((c&255)*0.4|0,((c>>8)&255)*0.4|0,((c>>16)&255)*0.4|0); }
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+// ---------- 标题火焰 ----------
+const titleCv=document.createElement('canvas'); titleCv.width=W; titleCv.height=90;
+const titleCtx=titleCv.getContext('2d',{willReadFrequently:true});
+let titleFire=null, titleT=0;
+const FIRE_PAL=[];
+for(let i=0;i<37;i++){
+  const t=i/36;
+  FIRE_PAL.push(rgb(clamp(t*3*255,0,255)|0,clamp((t-0.33)*2.4*255,0,215)|0,clamp((t-0.78)*3*255,0,170)|0));
+}
+function renderTitle(){
+  titleT+=1/60;
+  if(!titleFire){ titleFire=new Uint8Array(W*(VIEWH+2)); for(let x=0;x<W;x++) titleFire[(VIEWH+1)*W+x]=36; }
+  const F=titleFire;
+  for(let y=1;y<VIEWH+2;y++)for(let x=0;x<W;x++){
+    const src=F[y*W+x];
+    if(!src) continue;
+    const nx=clamp(x+floor(rnd()*3)-1,0,W-1);
+    F[(y-1)*W+nx]=Math.max(0,src-(rnd()*2|0));
+  }
+  for(let y=0;y<VIEWH;y++)for(let x=0;x<W;x++) FB[y*W+x]=FIRE_PAL[F[(y+2)*W+x]];
+  titleCtx.clearRect(0,0,W,90);
+  titleCtx.font='bold 46px "Microsoft YaHei",sans-serif';
+  titleCtx.fillStyle='#3a0500'; titleCtx.fillText('毁灭战士',54,52);
+  titleCtx.fillStyle='#ffcf70'; titleCtx.fillText('毁灭战士',50,48);
+  titleCtx.font='bold 19px monospace';
+  titleCtx.fillStyle='#3a0500'; titleCtx.fillText('D O O M · 1993',91,78);
+  titleCtx.fillStyle='#ff5030'; titleCtx.fillText('D O O M · 1993',89,76);
+  const td=titleCtx.getImageData(0,0,W,90).data;
+  for(let y=0;y<90;y++)for(let x=0;x<W;x++){
+    const i4=(y*W+x)*4;
+    if(td[i4+3]>120){ const py=y+14; if(py<VIEWH) FB[py*W+x]=rgb(td[i4],td[i4+1],td[i4+2]); }
+  }
+}
+
+// ---------- UI ----------
+const ovl=document.getElementById('ovl'), ovlBox=document.getElementById('ovlBox');
+let msgTimer=null;
+function msgBox(t,dur){
+  const m=document.getElementById('msg');
+  m.textContent=t;
+  clearTimeout(msgTimer);
+  msgTimer=setTimeout(()=>{ m.textContent=''; },(dur||2.2)*1000);
+}
+function ovlVisible(){ return !ovl.classList.contains('hide'); }
+function showTitle(){
+  state='title'; P=null;
+  ovl.classList.remove('hide');
+  ovlBox.innerHTML=`
+    <div style="height:96px"></div>
+    <h2 style="color:#ffb050">毁灭战士 1993 · 致敬版</h2>
+    <p>选择难度</p>
+    <div>
+      <button class="btn small ${diff===0?'sel':''}" id="d0">不太疼</button>
+      <button class="btn small ${diff===1?'sel':''}" id="d1">普通</button>
+      <button class="btn small ${diff===2?'sel':''}" id="d2">地狱</button>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" id="bStart">开 始</button>
+      <button class="btn" id="bHelp">操作说明</button>
+      <button class="btn" id="bFull">全 屏</button>
+    </div>
+    <p style="font-size:12px;color:#8a7a68;margin-top:8px">单机复古FPS · 灵感致敬 id Software 1993 年经典之作</p>`;
+  document.getElementById('d0').onclick=()=>{ diff=0; showTitle(); };
+  document.getElementById('d1').onclick=()=>{ diff=1; showTitle(); };
+  document.getElementById('d2').onclick=()=>{ diff=2; showTitle(); };
+  document.getElementById('bStart').onclick=startGame;
+  document.getElementById('bHelp').onclick=showHelp;
+  document.getElementById('bFull').onclick=toggleFull;
+}
+function showHelp(){
+  ovlBox.innerHTML=`
+    <h2>操作说明</h2>
+    <p><b>键盘</b>: WASD 移动 · 方向键/鼠标 转向 · 点击画面锁定鼠标<br>
+    开火: 鼠标 / CTRL · 使用开门: E / 空格 · 换枪: 1-4 / 滚轮<br>
+    地图: TAB · 音乐: M · 全屏: F · 暂停: ESC</p>
+    <p><b>触屏</b>: 左半屏拖动=移动摇杆 · 右半屏拖动=转向<br>
+    右下角 开火 / 使用 / 换枪 按钮</p>
+    <p style="color:#ff7040">提示：射击油桶会引起大爆炸；绿色毒液会持续伤害；<br>红/蓝门需要对应钥匙卡。老玩家都懂：IDDQD / IDKFA</p>
+    <button class="btn" id="bBack">返 回</button>`;
+  document.getElementById('bBack').onclick=showTitle;
+}
+function startGame(){
+  initAudio(); AC&&AC.resume&&AC.resume();
+  P=null; totalTime=0; musStep=0; musNext=AC?AC.currentTime:0;
+  wCur=1;
+  loadLevel(0);
+  state='brief';
+  ovl.classList.remove('hide');
+  ovlBox.innerHTML=`
+    <h2>${LEVELS[0].name}</h2>
+    <p>${LEVELS[0].brief.replace(/\n/g,'<br>')}</p>
+    <p class="blink" style="color:#ffb020">点击进入地狱 →</p>`;
+  ovlBox.onclick=()=>{ ovlBox.onclick=null; ovl.classList.add('hide'); state='play'; if(AC) musNext=AC.currentTime; };
+}
+function fmtT(s){ return floor(s/60)+':'+String(floor(s%60)).padStart(2,'0'); }
+function showInter(){
+  document.exitPointerLock&&document.exitPointerLock();
+  mouseFire=false;
+  ovl.classList.remove('hide');
+  if(lvlIdx>=LEVELS.length-1){
+    state='win';
+    ovlBox.innerHTML=`
+      <h1>胜 利 !</h1>
+      <p>你杀穿了地狱，关闭了传送门。<br>……但地狱永不止息。</p>
+      <p>总用时 <span class="stat">${fmtT(totalTime)}</span></p>
+      <button class="btn" id="bAgain">再来一局</button>
+      <button class="btn" id="bMenu">主菜单</button>`;
+    document.getElementById('bAgain').onclick=()=>{ totalTime=0; startGame(); };
+    document.getElementById('bMenu').onclick=showTitle;
+  } else {
+    state='inter';
+    ovlBox.innerHTML=`
+      <h2>${LEVELS[lvlIdx].name} · 完成</h2>
+      <p>杀敌 <span class="stat">${kills}/${totalKills}</span> ·
+         物品 <span class="stat">${itemsGot}/${totalItems}</span> ·
+         用时 <span class="stat">${fmtT(lvlTime)}</span></p>
+      <button class="btn" id="bNext">下一关</button>`;
+    document.getElementById('bNext').onclick=()=>{
+      const keep={armor:P.armor,weapons:P.weapons,ammo:{...P.ammo}};
+      loadLevel(lvlIdx+1);
+      P.armor=keep.armor; P.weapons=keep.weapons; P.ammo=keep.ammo;
+      P.snap=JSON.stringify({hp:P.hp,armor:P.armor,w:P.weapons,a:{...P.ammo}});
+      wCur=P.weapons[3]?3:(P.weapons[2]?2:1); wRaise=1;
+      state='brief';
+      ovlBox.innerHTML=`
+        <h2>${LEVELS[lvlIdx].name}</h2>
+        <p>${LEVELS[lvlIdx].brief.replace(/\n/g,'<br>')}</p>
+        <p class="blink" style="color:#ffb020">点击继续 →</p>`;
+      ovlBox.onclick=()=>{ ovlBox.onclick=null; ovl.classList.add('hide'); state='play'; };
+    };
+  }
+}
+function restoreSnap(){
+  const s=JSON.parse(P.snap);
+  loadLevel(lvlIdx);
+  P.hp=s.hp; P.armor=s.armor; P.weapons=s.w; P.ammo=s.a;
+  wCur=P.weapons[3]?3:(P.weapons[2]?2:1);
+  mouseFire=false; tFire=false;
+  ovl.classList.add('hide'); state='play';
+}
+function showDead(){
+  state='dead';
+  document.exitPointerLock&&document.exitPointerLock();
+  mouseFire=false;
+  ovl.classList.remove('hide');
+  ovlBox.innerHTML=`
+    <h1 style="color:#c01010">你 死 了</h1>
+    <p>恶魔们正在开派对……用你的尸体。</p>
+    <button class="btn" id="bRetry">重试本关</button>
+    <button class="btn" id="bMenu2">主菜单</button>`;
+  document.getElementById('bRetry').onclick=restoreSnap;
+  document.getElementById('bMenu2').onclick=showTitle;
+}
+function pauseGame(){
+  if(state!=='play') return;
+  state='pause';
+  ovl.classList.remove('hide');
+  ovlBox.innerHTML=`
+    <h2>已暂停</h2>
+    <button class="btn" id="bRes">继续</button>
+    <button class="btn" id="bRe">重开本关</button>
+    <button class="btn" id="bMenu3">主菜单</button>`;
+  document.getElementById('bRes').onclick=resumeGame;
+  document.getElementById('bRe').onclick=restoreSnap;
+  document.getElementById('bMenu3').onclick=showTitle;
+  document.exitPointerLock&&document.exitPointerLock();
+}
+function resumeGame(){ ovl.classList.add('hide'); state='play'; }
+function toggleFull(){
+  if(!document.fullscreenElement){ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{}); }
+  else document.exitFullscreen();
+}
+
+// ---------- 缩放适配 ----------
+function resize(){
+  const s=Math.min(innerWidth/W,innerHeight/H);
+  const w=floor(W*s), h=floor(H*s);
+  cv.style.width=w+'px'; cv.style.height=h+'px';
+  const sc=document.getElementById('scan');
+  sc.style.width=w+'px'; sc.style.height=h+'px';
+  sc.style.left=((innerWidth-w)/2)+'px'; sc.style.top=((innerHeight-h)/2)+'px';
+  for(const el of [ovl,document.getElementById('msg'),document.getElementById('touchUI')]){
+    el.style.left='0'; el.style.top='0'; el.style.width=innerWidth+'px'; el.style.height=innerHeight+'px';
+  }
+}
+addEventListener('resize',resize);
+
+// ---------- 主循环 ----------
+let lastT=0, rafPending=false, lastLoopT=0;
+function loop(t){
+  rafPending=false;
+  const now=performance.now();
+  const dt=Math.min(0.05,(now-lastLoopT)/1000||0.016);
+  lastLoopT=now;
+  update(dt);
+  render();
+  startLoop();
+}
+function startLoop(){
+  if(!rafPending){ rafPending=true; requestAnimationFrame(loop); }
+}
+// rAF 停摆兜底：部分内嵌 WebView / 后台标签不驱动 rAF，用定时器接力
+setInterval(()=>{
+  if(performance.now()-lastLoopT>120){ rafPending=false; loop(performance.now()); }
+},33);
+
+// ---------- 启动 ----------
+TEX=genTextures();
+SPR=genSprites();
+FACES=genFaces();
+buildHud();
+resize();
+setupTouch();
+showTitle();
+requestAnimationFrame(loop);
+document.addEventListener('touchstart',()=>{ initAudio(); AC&&AC.resume&&AC.resume(); },{once:true,passive:true});
+document.addEventListener('mousedown',()=>{ initAudio(); AC&&AC.resume&&AC.resume(); },{once:true});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+// 调试钩子（不影响游戏）
+window.__dbg=()=>({state,lv:lvlIdx,x:P&&P.x,y:P&&P.y,hp:P&&P.hp,ammo:P&&P.ammo,weapons:P&&P.weapons,kills,dead:P&&P.dead});
+</script>
+</body>
+</html>
