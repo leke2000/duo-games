@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1f">
+<title>夏洛特 · Charlotte — 星之海的约定（同人游戏）</title>
+<style>
+  html,body{margin:0;padding:0;background:#04060f;height:100%;overflow:hidden;
+    -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none;
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#04060f}
+  #cv{image-rendering:pixelated;image-rendering:crisp-edges;background:#04060f}
+  #ovl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:none}
+  #ovl.show{pointer-events:auto}
+  .panel{background:rgba(8,12,28,.92);border:1px solid #3b4f8f;border-radius:10px;
+    box-shadow:0 0 40px rgba(60,90,200,.35),inset 0 0 24px rgba(20,40,90,.5);
+    padding:20px 26px;text-align:center;max-width:88vw;max-height:86vh;overflow:auto;color:#cdd6f4}
+  .panel h1{color:#fff;font-size:min(10vw,42px);margin:2px 0 4px;letter-spacing:10px;text-shadow:0 0 18px #6f9dff}
+  .panel h2{color:#9db8ff;font-size:min(5vw,18px);margin:2px 0 12px;letter-spacing:3px}
+  .panel p{font-size:13px;line-height:1.8;margin:5px 0;color:#aebadb}
+  .panel .note{font-size:11px;color:#5e6f9e}
+  .btn{display:inline-block;margin:5px;padding:9px 22px;font-size:15px;color:#eaf0ff;cursor:pointer;
+    background:linear-gradient(#2c3f86,#1a2650);border:1px solid #5a74c8;border-radius:6px;letter-spacing:2px}
+  .btn:active{background:linear-gradient(#3c55aa,#24346e)}
+  .btn.ghost{background:transparent;border:1px solid #3b4f8f;color:#8fa3d8}
+  .chip{display:inline-block;margin:4px;padding:8px 14px;border:1px solid #3b4f8f;border-radius:6px;
+    font-size:13px;cursor:pointer;color:#cdd6f4;background:rgba(20,30,60,.6)}
+  .chip:hover{border-color:#7fa4ff}
+  #touchUI{position:absolute;inset:0;z-index:5;display:none;pointer-events:none}
+  #stickBase{position:absolute;width:96px;height:96px;border-radius:50%;background:rgba(120,150,255,.12);
+    border:2px solid rgba(140,170,255,.35);left:26px;bottom:26px}
+  #stickKnob{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(160,190,255,.4);left:26px;top:26px}
+  .tbtn{position:absolute;border-radius:50%;background:rgba(120,150,255,.16);border:2px solid rgba(150,180,255,.4);
+    color:#dfe8ff;display:flex;align-items:center;justify-content:center;font-size:14px;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="960" height="540"></canvas>
+  <div id="ovl"></div>
+  <div id="touchUI">
+    <div id="stickBase"><div id="stickKnob"></div></div>
+    <div class="tbtn" id="tbJump" style="right:24px;bottom:96px;width:64px;height:64px">跳</div>
+    <div class="tbtn" id="tbAtk" style="right:100px;bottom:24px;width:64px;height:64px">击</div>
+    <div class="tbtn" id="tbAbi" style="right:24px;bottom:24px;width:64px;height:64px">能</div>
+    <div class="tbtn" id="tbSub" style="right:176px;bottom:96px;width:52px;height:52px;font-size:12px">隐</div>
+    <div class="tbtn" id="tbPause" style="right:12px;top:12px;width:44px;height:44px;font-size:14px">Ⅱ</div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ================= 基础 ================= */
+const W=960,H=540,TS=36,ROWS=15;
+const cv=document.getElementById('cv'),g=cv.getContext('2d');
+const ovl=document.getElementById('ovl'),wrapEl=document.getElementById('wrap');
+function fit(){const s=Math.min(innerWidth/W,innerHeight/H);cv.style.width=(W*s|0)+'px';cv.style.height=(H*s|0)+'px';}
+addEventListener('resize',fit);fit();
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,R=Math.random;
+let state='boot',flash=0,shake=0,tGlobal=0,paused=false;
+let save={u:1,clear:false};
+try{const s=JSON.parse(localStorage.getItem('charlotteSave'));if(s&&s.u)save=s;}catch(e){}
+function store(){try{localStorage.setItem('charlotteSave',JSON.stringify(save));}catch(e){}}
+
+/* ================= 输入 ================= */
+const keys={},press={};let tapEdge=false;
+addEventListener('keydown',e=>{
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();
+  if(!e.repeat)press[e.code]=true;
+  keys[e.code]=true;pokeAudio();
+});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+addEventListener('contextmenu',e=>e.preventDefault());
+let touchMode=('ontouchstart'in window)||navigator.maxTouchPoints>0;
+let stickX=0,stickId=null,stickCX=0,stickCY=0;
+if(touchMode)document.getElementById('touchUI').style.display='block';
+wrapEl.addEventListener('touchstart',e=>{
+  pokeAudio();
+  let used=false;
+  for(const t of e.changedTouches){
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    if(el&&el.closest&&el.closest('.tbtn,#ovl'))continue;
+    if(t.clientX<innerWidth*.42&&stickId===null){
+      stickId=t.identifier;stickCX=t.clientX;stickCY=t.clientY;
+      const b=document.getElementById('stickBase');
+      b.style.left=(t.clientX-48)+'px';b.style.top=(t.clientY-48)+'px';b.style.bottom='auto';
+      used=true;
+    }else{tapEdge=true;if(state==='play')press.KeyJ=true;used=true;}
+  }
+  if(used)e.preventDefault();
+},{passive:false});
+wrapEl.addEventListener('touchmove',e=>{
+  let used=false;
+  for(const t of e.changedTouches){
+    if(t.identifier===stickId){
+      stickX=clamp((t.clientX-stickCX)/44,-1,1);
+      document.getElementById('stickKnob').style.transform=
+        'translate('+clamp((t.clientX-stickCX)/44,-1,1)*26+'px,'+clamp((t.clientY-stickCY)/44,-1,1)*14+'px)';
+      used=true;
+    }
+  }
+  if(used)e.preventDefault();
+},{passive:false});
+function endTouch(e){
+  for(const t of e.changedTouches){
+    if(t.identifier===stickId){
+      stickId=null;stickX=0;
+      const b=document.getElementById('stickBase');
+      b.style.left='26px';b.style.top='auto';b.style.bottom='26px';
+      document.getElementById('stickKnob').style.transform='';
+    }
+  }
+}
+wrapEl.addEventListener('touchend',endTouch);wrapEl.addEventListener('touchcancel',endTouch);
+[['tbJump','Space'],['tbAtk','KeyJ'],['tbAbi','KeyK'],['tbSub','KeyL']].forEach(([id,code])=>{
+  const el=document.getElementById(id);
+  el.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();pokeAudio();press[code]=true;keys[code]=true;},{passive:false});
+  const up=e=>{e.preventDefault();keys[code]=false;};
+  el.addEventListener('touchend',up);el.addEventListener('touchcancel',up);
+});
+document.getElementById('tbPause').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();togglePause();},{passive:false});
+wrapEl.addEventListener('mousedown',e=>{
+  if(e.target.closest&&e.target.closest('#ovl,.tbtn'))return;
+  pokeAudio();tapEdge=true;
+});
+function axIn(){let v=stickX;if(keys.KeyD||keys.ArrowRight)v+=1;if(keys.KeyA||keys.ArrowLeft)v-=1;return clamp(v,-1,1);}
+function jumpEdge(){return press.Space||press.KeyW||press.ArrowUp;}
+function jumpHeld(){return keys.Space||keys.KeyW||keys.ArrowUp;}
+function atkEdge(){return press.KeyJ;}
+function abiEdge(){return press.KeyK;}
+function subEdge(){return press.KeyL;}
+function confirmEdge(){return press.KeyJ||press.Space||press.Enter||tapEdge;}
+function holdFast(){return keys.Space||keys.KeyJ;}
+function setTouchLabel(id,txt){const el=document.getElementById(id);if(el)el.textContent=txt;}
+function setTouchUI(s){
+  setTouchLabel('tbAtk',s.atk||'击');setTouchLabel('tbAbi',s.abi||'能');setTouchLabel('tbSub',s.sub||'隐');
+  ['tbAtk','tbAbi','tbSub'].forEach(id=>{document.getElementById(id).style.visibility=s.show?'visible':'hidden';});
+}
+
+/* ================= 音频 ================= */
+let AC=null,masterG=null,musicG=null,noiseBuf=null,bgmOn=true;
+function pokeAudio(){
+  if(!AC){
+    try{AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
+    masterG=AC.createGain();masterG.gain.value=.5;masterG.connect(AC.destination);
+    musicG=AC.createGain();musicG.gain.value=.32;musicG.connect(masterG);
+    noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
+    const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=R()*2-1;
+  }
+  if(AC&&AC.state==='suspended')AC.resume();
+}
+function tone(t0,dur,f0,f1,vol,type,dest){
+  const o=AC.createOscillator(),gn=AC.createGain();
+  o.type=type||'sine';o.frequency.setValueAtTime(f0,t0);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t0+dur);
+  gn.gain.setValueAtTime(vol,t0);gn.gain.exponentialRampToValueAtTime(.001,t0+dur);
+  o.connect(gn);gn.connect(dest||masterG);o.start(t0);o.stop(t0+dur+.02);
+}
+function noiseHit(t0,dur,f0,f1,vol,type){
+  const s=AC.createBufferSource();s.buffer=noiseBuf;s.loop=true;
+  const f=AC.createBiquadFilter();f.type=type||'lowpass';
+  f.frequency.setValueAtTime(f0,t0);f.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t0+dur);
+  const gn=AC.createGain();gn.gain.setValueAtTime(vol,t0);gn.gain.exponentialRampToValueAtTime(.001,t0+dur);
+  s.connect(f);f.connect(gn);gn.connect(masterG);s.start(t0);s.stop(t0+dur+.02);
+}
+function sfx(n){
+  if(!AC)return;const t=AC.currentTime;
+  switch(n){
+    case 'sel':tone(t,.05,700,700,.12,'square');break;
+    case 'ok':tone(t,.07,660,660,.2,'square');tone(t+.08,.1,990,990,.2,'square');break;
+    case 'no':tone(t,.12,200,120,.25,'square');break;
+    case 'jump':tone(t,.12,300,600,.16,'square');break;
+    case 'hurt':tone(t,.16,220,90,.35,'sawtooth');noiseHit(t,.1,600,180,.25);break;
+    case 'pdeath':tone(t,.6,180,40,.4,'sawtooth');noiseHit(t,.5,400,60,.35);break;
+    case 'fire':tone(t,.2,420,120,.22,'sawtooth');noiseHit(t,.15,900,250,.18);break;
+    case 'shoot':noiseHit(t,.06,2600,700,.3);break;
+    case 'hit':noiseHit(t,.08,1800,400,.3);tone(t,.06,500,180,.2,'square');break;
+    case 'boom':noiseHit(t,.5,900,60,.7);tone(t,.4,90,30,.5);break;
+    case 'edeath':tone(t,.4,160,40,.35,'sawtooth');noiseHit(t,.35,700,90,.3);break;
+    case 'crack':noiseHit(t,.12,2200,400,.5);tone(t,.1,800,200,.3,'square');break;
+    case 'swing':noiseHit(t,.08,1200,300,.2,'bandpass');break;
+    case 'dash':tone(t,.12,900,300,.2,'sawtooth');noiseHit(t,.1,2000,500,.15);break;
+    case 'possess':tone(t,.3,200,900,.2,'sine');tone(t+.05,.3,300,1200,.15,'triangle');break;
+    case 'clear':tone(t,.35,800,1400,.13,'sine');tone(t+.1,.3,600,1200,.1,'sine');break;
+    case 'catch':tone(t,.2,300,140,.3,'square');tone(t+.15,.2,260,120,.3,'square');break;
+    case 'rumble':noiseHit(t,.8,300,60,.4);tone(t,.7,60,35,.3);break;
+    case 'timeleap':tone(t,.7,300,1600,.2,'sine');noiseHit(t,.6,2000,4000,.12,'highpass');break;
+    case 'pickup':tone(t,.06,660,660,.2,'square');tone(t+.07,.09,990,990,.2,'square');break;
+    case 'fanfare':[523,659,784,1046].forEach((f,i)=>tone(t+i*.11,.14,f,f,.22,'triangle'));break;
+  }
+}
+const MOODS={
+  title:{bpm:66,seq:[[57,60,64],[53,57,60],[55,59,62],[53,57,60]],w:'triangle',v:.15},
+  calm:{bpm:76,seq:[[60,64,67],[55,59,62],[57,60,64],[53,57,60]],w:'triangle',v:.15},
+  tense:{bpm:104,seq:[[50,53,57],[48,51,55],[50,53,57],[46,50,53]],w:'sawtooth',v:.08,stac:1},
+  battle:{bpm:128,seq:[[52,55,59],[48,52,55],[50,53,57],[55,59,62]],w:'square',v:.08},
+  sad:{bpm:54,seq:[[57,60,64],[53,57,60],[55,58,62],[53,57,60]],w:'sine',v:.17},
+  hope:{bpm:80,seq:[[53,57,60],[55,59,62],[57,60,64],[60,64,67]],w:'triangle',v:.15},
+  void:{bpm:46,seq:[[45,48,52],[44,47,51],[45,48,52],[43,47,50]],w:'sine',v:.13},
+};
+let mood=null,nextBar=0,barI=0;
+function setMood(m){if(m===mood)return;mood=m;barI=0;if(AC)nextBar=AC.currentTime+.08;}
+const mf=m=>440*Math.pow(2,(m-69)/12);
+function musicTick(){
+  if(!AC||!mood||!bgmOn||paused)return;
+  const M=MOODS[mood];const bar=60/M.bpm*4;
+  if(AC.currentTime<nextBar-.2)return;
+  if(AC.currentTime>nextBar)nextBar=AC.currentTime+.05;
+  const t0=nextBar,chord=M.seq[barI%M.seq.length];barI++;
+  const step=bar/8,pat=[0,1,2,1,2,1,0,2];
+  for(let i=0;i<8;i++){
+    const n=chord[pat[i]]+(i>=4?12:0);
+    tone(t0+i*step,(M.stac?step*.5:step*1.7),mf(n),mf(n),M.v,M.w,musicG);
+  }
+  tone(t0,bar*.85,mf(chord[0]-12),mf(chord[0]-12),M.v*1.1,'sine',musicG);
+  if(mood==='battle'){
+    tone(t0,.1,110,45,.2,'square',musicG);tone(t0+bar/2,.1,110,45,.2,'square',musicG);
+    noiseHit(t0+bar/4,.04,3000,900,.05);noiseHit(t0+bar*3/4,.04,3000,900,.05);
+  }
+}
+/* ================= 美术：像素精灵 ================= */
+function mkCv(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+const SPR={};
+function px(c,x,y,col,w,h){const x2=c.getContext('2d');x2.fillStyle=col;x2.fillRect(x,y,w||1,h||1);}
+// 通用 24x32 少年像素像（可换发色/制服色/细节）
+function person(o){
+  // o:{hair,skin,unif,unif2,accent,extra(fn)}
+  const c=mkCv(24,32),x=c.getContext('2d');
+  const hair=o.hair,skin=o.skin||'#f2cfae',unif=o.unif,un2=o.unif2||o.unif,ac=o.accent||'#fff';
+  // 腿
+  x.fillStyle='#26304a';x.fillRect(7,26,4,6);x.fillRect(13,26,4,6);
+  x.fillStyle='#151a2c';x.fillRect(7,30,4,2);x.fillRect(13,30,4,2);
+  // 身体
+  x.fillStyle=unif;x.fillRect(6,16,12,10);
+  x.fillStyle=un2;x.fillRect(6,16,12,3);
+  x.fillStyle=ac;x.fillRect(11,18,2,7); // 拉链/领带
+  // 手
+  x.fillStyle=skin;x.fillRect(4,18,2,6);x.fillRect(18,18,2,6);
+  // 头
+  x.fillStyle=skin;x.fillRect(7,7,10,9);
+  // 头发
+  x.fillStyle=hair;x.fillRect(6,4,12,5);x.fillRect(5,6,2,6);x.fillRect(17,6,2,6);
+  x.fillRect(7,9,2,2);
+  // 眼
+  x.fillStyle='#1c2333';x.fillRect(9,11,2,2);x.fillRect(14,11,2,2);
+  if(o.eyeGlow){x.fillStyle=o.eyeGlow;x.fillRect(9,11,2,2);x.fillRect(14,11,2,2);}
+  // 领结
+  if(o.bow){x.fillStyle=o.bow;x.fillRect(10,16,4,2);}
+  if(o.extra)o.extra(x);
+  return c;
+}
+SPR.yuu=person({hair:'#2b2530',unif:'#3a4668',un2:'#2c3552',accent:'#d8dee8'});
+SPR.yuu_glow=person({hair:'#2b2530',unif:'#3a4668',un2:'#2c3552',accent:'#d8dee8',eyeGlow:'#8fd6ff'});
+SPR.nao=person({hair:'#cfd8e8',unif:'#3a4668',un2:'#2c3552',accent:'#d8dee8',extra:x=>{
+  x.fillStyle='#cfd8e8';x.fillRect(4,6,4,10);x.fillRect(16,6,4,8); // 长发
+  x.fillStyle='#fff';x.fillRect(10,16,4,2); // 学生会袖章高光
+}});
+SPR.misa=person({hair:'#5a4a8a',unif:'#7a2830',un2:'#5c1e26',accent:'#ffcf5a',extra:x=>{
+  x.fillStyle='#5a4a8a';x.fillRect(4,4,6,14);x.fillRect(15,4,5,12);
+  x.fillStyle='#ffb3c8';x.fillRect(9,11,2,2);x.fillRect(14,11,2,2); // 粉瞳
+}});
+SPR.joji=person({hair:'#5a3c22',unif:'#7a2830',un2:'#5c1e26',accent:'#ffcf5a',extra:x=>{
+  x.fillStyle='#5a3c22';x.fillRect(5,3,14,4);x.fillRect(4,5,3,8);
+  x.fillStyle='#f2cfae';x.fillRect(9,13,6,3); // 下巴
+  x.fillStyle='#5a3c22';x.fillRect(9,14,6,2); // 胡渣
+}});
+SPR.hiwari=person({hair:'#ff9a3c',unif:'#7a2830',un2:'#5c1e26',accent:'#ffcf5a',extra:x=>{
+  x.fillStyle='#ff9a3c';x.fillRect(4,5,5,12);x.fillRect(15,5,5,12);
+  x.fillStyle='#ffd9b0';x.fillRect(8,15,8,2); // 招牌笑
+}});
+SPR.yusa=person({hair:'#7a4a9a',unif:'#f0a0b8',un2:'#e888a8',accent:'#fff',extra:x=>{
+  x.fillStyle='#7a4a9a';x.fillRect(4,4,6,14);x.fillRect(15,4,5,14);
+  x.fillStyle='#ff9ab8';x.fillRect(10,15,4,1);
+  x.fillStyle='#fff';x.fillRect(6,7,3,2); // 白色发卡
+}});
+SPR.kuuro=person({hair:'#d8d2c8',unif:'#5c5648',un2:'#484236',accent:'#caa84a',eyeGlow:'#ffd86a',extra:x=>{
+  x.fillStyle='#d8d2c8';x.fillRect(5,3,14,4);
+  x.fillStyle='#caa84a';x.fillRect(10,16,4,2); // 领带
+}});
+SPR.shunsuke=person({hair:'#2b2530',unif:'#3a4668',un2:'#2c3552',accent:'#d8dee8',extra:x=>{
+  x.fillStyle='#8fd6ff';x.fillRect(9,11,2,2);x.fillRect(14,11,2,2); // 眼罩内微光→无，改灰
+  x.fillStyle='#4a5570';x.fillRect(7,4,12,3);
+  x.fillStyle='#dfe8f8';x.fillRect(8,10,4,3); // 眼罩
+  x.fillStyle='#2b2530';x.fillRect(6,14,12,2); // 短须
+}});
+SPR.scientist=person({hair:'#8a8a92',unif:'#e8e8ee',un2:'#d0d0da',accent:'#88a',extra:x=>{
+  x.fillStyle='#8a8a92';x.fillRect(5,3,14,4);
+  x.fillStyle='#5ac8e8';x.fillRect(9,11,6,2); // 护目镜
+}});
+SPR.golem=person({hair:'#4a5a6a',unif:'#5a6a7a',un2:'#44505c',accent:'#9ab',skin:'#7a8a96',extra:x=>{
+  x.fillStyle='#4a5a6a';x.fillRect(5,3,14,5);
+  x.fillStyle='#3a444e';x.fillRect(6,18,3,7);x.fillRect(15,18,3,7);
+  x.fillStyle='#9adfff';x.fillRect(9,11,2,2);x.fillRect(14,11,2,2);
+}});
+SPR.troll=person({hair:'#3a2c22',unif:'#6a4a2a',un2:'#543a20',accent:'#c8a86a',skin:'#c8a882',eyeGlow:'#ffdf7a',extra:x=>{
+  x.fillStyle='#3a2c22';x.fillRect(4,2,16,6);x.fillRect(3,5,3,9);
+  x.fillStyle='#6a4a2a';x.fillRect(6,18,3,7);x.fillRect(15,18,3,7);
+}});
+// 小怪：科学班兵
+(function(){
+  const c=mkCv(24,32),x=c.getContext('2d');
+  x.fillStyle='#1e2430';x.fillRect(7,26,4,6);x.fillRect(13,26,4,6);
+  x.fillStyle='#37455c';x.fillRect(6,16,12,10);
+  x.fillStyle='#28324a';x.fillRect(6,16,12,3);
+  x.fillStyle='#6fe0ff';x.fillRect(8,10,8,3); // 面罩
+  x.fillStyle='#4a5a74';x.fillRect(4,17,3,7);x.fillRect(17,17,3,7);
+  x.fillStyle='#202838';x.fillRect(5,6,14,5); // 头盔
+  SPR.soldier=c;
+})();
+function flipSprite(src){const c=mkCv(src.width,src.height);const x=c.getContext('2d');x.translate(src.width,0);x.scale(-1,1);x.drawImage(src,0,0);return c;}
+SPR.yuuL=flipSprite(SPR.yuu);SPR.naoL=flipSprite(SPR.nao);SPR.misaL=flipSprite(SPR.misa);
+SPR.jojiL=flipSprite(SPR.joji);SPR.hiwariL=flipSprite(SPR.hiwari);SPR.yusaL=flipSprite(SPR.yusa);
+SPR.kuuroL=flipSprite(SPR.kuuro);SPR.golemL=flipSprite(SPR.golem);SPR.soldierL=flipSprite(SPR.soldier);
+SPR.trollL=flipSprite(SPR.troll);SPR.shunsukeL=flipSprite(SPR.shunsuke);
+
+/* ================= 美术：背景 ================= */
+function skyGrad(ctx,c1,c2){const gr=ctx.createLinearGradient(0,0,0,H);gr.addColorStop(0,c1);gr.addColorStop(1,c2);ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);}
+let starSeeds=[];for(let i=0;i<130;i++)starSeeds.push([R()*W,R()*H*.75,R()*1.4+.3,R()*6.28]);
+function drawStars(ctx,t,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  for(const s of starSeeds){
+    const tw=.4+.6*Math.abs(Math.sin(t*1.5+s[3]));
+    ctx.fillStyle='rgba(255,255,255,'+(.5*tw)+')';
+    ctx.fillRect(s[0],s[1]+Math.sin(t*.3+s[3])*4,s[2],s[2]);
+  }
+  ctx.restore();
+}
+function bgStars(ctx,t,camX){
+  skyGrad(ctx,'#070b1e','#1b2350');
+  drawStars(ctx,t,1);
+  // 斜向流星（回忆感）
+  const m=(t*90)%(W+300)-150;
+  ctx.save();ctx.globalAlpha=.5;ctx.strokeStyle='#cfe4ff';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(W+150-m,H*.2);ctx.lineTo(W+120-m,H*.2+34);ctx.stroke();ctx.restore();
+}
+function bgSchool(ctx,t,night){
+  skyGrad(ctx,night?'#0a1030':'#7fb4e8',night?'#1c2a60':'#cfe4f6');
+  if(!night){ctx.fillStyle='rgba(255,255,255,.75)';for(let i=0;i<4;i++){const x=((i*260+t*8)%(W+200))-100;ctx.beginPath();ctx.ellipse(x,H*.22,70,16,0,0,7);ctx.ellipse(x+40,H*.2,50,13,0,0,7);ctx.fill();}}
+  else drawStars(ctx,t,.9);
+  // 教学楼
+  ctx.fillStyle=night?'#141c3e':'#c8b49a';ctx.fillRect(90,H*.34,W-180,H*.4);
+  ctx.fillStyle=night?'#0e1430':'#a89478';ctx.fillRect(80,H*.34,20,H*.42);ctx.fillRect(W-100,H*.34,20,H*.42);
+  for(let r=0;r<4;r++)for(let cX=0;cX<7;cX++){
+    const lit=night&&((r*7+cX)%3===0&&Math.sin(t*.8+r+cX)>.2);
+    ctx.fillStyle=night?(lit?'#ffd98a':'#0c122c'):'#7a6c54';
+    ctx.fillRect(130+cX*100,H*.38+r*46,52,30);
+  }
+  ctx.fillStyle=night?'#1a2450':'#8a7a60';ctx.fillRect(70,H*.3,40,H*.06);ctx.fillRect(W-110,H*.3,40,H*.06);
+  // 前景地面
+  ctx.fillStyle=night?'#0a0f26':'#4a4a48';ctx.fillRect(0,H-70,W,70);
+  ctx.fillStyle=night?'#111735':'#5a5a56';ctx.fillRect(0,H-70,W,8);
+}
+function bgCity(ctx,t,camX){
+  skyGrad(ctx,'#0b1230','#2a3a7a');
+  drawStars(ctx,t,.8);
+  const rnd=(n)=>{const s=Math.sin(n*127.1)*43758.5;return s-Math.floor(s);};
+  const cx2=camX||0;
+  for(let layer=0;layer<2;layer++){
+    const yBase=H*(layer?0.62:0.5),col=layer?'#121a3e':'#1c2854',sc=layer?1:0.7;
+    for(let i=0;i<14;i++){
+      const bw=(40+rnd(i+layer*9)*70)*sc,bh=(60+rnd(i*3+layer*7)*160)*sc;
+      const bx=((i*90+ (layer?cx2*0.4:cx2*0.2))%(W+160))-80;
+      ctx.fillStyle=col;ctx.fillRect(bx,yBase-bh,bw,bh);
+      for(let wy=0;wy<bh/26-1;wy++)for(let wx=0;wx<bw/20-1;wx++){
+        if(rnd(i*91+wy*7+wx*3+layer)>.55){
+          ctx.fillStyle='rgba(255,220,140,'+(.5+.4*Math.sin(t*2+i+wy))+')';
+          ctx.fillRect(bx+6+wx*20,yBase-bh+8+wy*26,6,8);
+        }
+      }
+    }
+  }
+  ctx.fillStyle='#0a0f28';ctx.fillRect(0,H-56,W,56);
+  ctx.fillStyle='#ffd98a';
+  for(let i=0;i<10;i++)ctx.fillRect(i*100+((t*40)%100),H-30,26,4);
+}
+function bgWild(ctx,t,night,camX){
+  skyGrad(ctx,night?'#0c1234':'#ffb26a',night?'#1c2a60':'#ffe0b0');
+  drawStars(ctx,t,night?1:0);
+  const sun=night?null:{x:W*.72,y:H*.42};
+  if(sun){ctx.fillStyle='rgba(255,240,200,.9)';ctx.beginPath();ctx.arc(sun.x,sun.y,26,0,7);ctx.fill();}
+  ctx.fillStyle=night?'#0e1a2c':'#7a5a3c';
+  const cx2=camX||0;
+  for(let i=0;i<9;i++){const hx=((i*160-cx2*0.2)%(W+320))-160;ctx.beginPath();ctx.moveTo(hx,H-80);ctx.lineTo(hx+110,H-190-i*9%60);ctx.lineTo(hx+230,H-80);ctx.fill();}
+  ctx.fillStyle=night?'#101c18':'#3c6a3c';ctx.fillRect(0,H-84,W,84);
+  ctx.fillStyle=night?'#18281f':'#4a7a48';
+  for(let i=0;i<12;i++){const gx=((i*120-cx2*0.6)%(W+240))-120;ctx.beginPath();ctx.ellipse(gx,H-40,80,14,0,0,7);ctx.fill();}
+}
+function bgLab(ctx,t){
+  ctx.fillStyle='#0a0e18';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<9;i++){
+    const px_=i*110+30;
+    ctx.fillStyle='#131a2c';ctx.fillRect(px_,60,84,H-120);
+    ctx.fillStyle='rgba(90,200,255,'+(.14+.06*Math.sin(t*2+i))+')';ctx.fillRect(px_+6,66,72,H-132);
+    ctx.fillStyle='rgba(140,230,255,.5)';ctx.fillRect(px_+6,66,72,3);ctx.fillRect(px_+6,H-70,72,3);
+  }
+  ctx.fillStyle='#060a12';ctx.fillRect(0,H-70,W,70);
+  ctx.fillStyle='#1a2438';ctx.fillRect(0,H-70,W,6);
+  ctx.fillStyle='rgba(90,200,255,.12)';ctx.fillRect(0,H-70,W,2);
+}
+function bgCollapse(ctx,t){
+  skyGrad(ctx,'#1c0f14','#3c1c18');
+  ctx.fillStyle='rgba(255,120,60,.12)';ctx.beginPath();ctx.arc(W*.5,H*.36,150+Math.sin(t)*8,0,7);ctx.fill();
+  // 漂浮碎石
+  const rnd=(n)=>{const s=Math.sin(n*91.7)*43758.5;return s-Math.floor(s);};
+  for(let i=0;i<26;i++){
+    const bx=rnd(i)*W,by=(rnd(i+50)*H+t*14*(0.4+rnd(i+9)))%H;
+    ctx.fillStyle='rgba(40,26,22,.9)';ctx.fillRect(bx,by,4+rnd(i+3)*8,4+rnd(i+7)*6);
+  }
+  ctx.fillStyle='#141018';ctx.fillRect(0,H-70,W,70);
+  ctx.fillStyle='#241a20';ctx.fillRect(0,H-70,W,8);
+  ctx.fillStyle='rgba(255,140,60,.16)';ctx.fillRect(0,H-70,W,2);
+}
+function bgVoid(ctx,t){
+  ctx.fillStyle='#020308';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<5;i++){
+    ctx.fillStyle='rgba(60,80,180,'+(0.05+i*0.015)+')';
+    ctx.beginPath();ctx.arc(W/2,H/2,60+i*55+Math.sin(t*.7+i)*8,0,7);ctx.fill();
+  }
+  drawStars(ctx,t,.5);
+}
+const BGS={stars:bgStars,school:bgSchool,schoolN:(c,t,x)=>bgSchool(c,t,true),city:bgCity,
+  wild:(c,t,x)=>bgWild(c,t,false),wildN:(c,t,x)=>bgWild(c,t,true),lab:bgLab,collapse:bgCollapse,void:bgVoid};
+// 平台贴图
+function drawPlat(ctx,x,y,w,h,theme){
+  const c={school:['#c8b49a','#8a7a60'],schoolN:['#2a3358','#181f40'],city:['#1c2854','#101730'],
+    wild:['#3c6a3c','#284826'],lab:['#1a2438','#0e1424'],collapse:['#241a20','#120c10'],
+    void:['#181c30','#0c0e1c'],stars:['#2a3358','#141a3a']}[theme]||['#2a3358','#141a3a'];
+  ctx.fillStyle=c[0];ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=c[1];ctx.fillRect(x,y+h-6,w,6);
+  ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(x,y,w,2);
+}
+
+/* ================= 对话系统 ================= */
+const dlg={on:false,lines:[],idx:0,typing:false,text:'',full:'',timer:0,name:'',spr:null,sprL:null,bg:null,mood:'calm',dark:false};
+function say(bg,mood,lines,after,spd){
+  dlg.on=true;dlg.lines=lines;dlg.idx=0;dlg.after=after;dlg.bg=bg;dlg.mood=mood;
+  dlg.typing=true;dlg.timer=0;dlg.full='';dlg.text='';dlg.spd=spd||18;
+  setMood(mood);state='dialog';
+  const first=lines[0];dlg.name=first?first[0]:'';
+  dlg.spr=first&&first[1]?SPR[first[1]]||null:null;
+  dlg.sprL=first&&first[1]?(SPR[first[1]+'L']||null):null;
+  setTouchUI({show:true,atk:'▼',abi:'',sub:''});
+  showDlgUI();
+}
+let dlgAfter=null;
+function showDlgUI(){ovl.className='show';}
+function hideDlgUI(){ovl.className='';ovl.innerHTML='';}
+function dlgNext(){
+  if(dlg.typing){dlg.typing=false;dlg.text=dlg.full;return;}
+  dlg.idx++;
+  if(dlg.idx>=dlg.lines.length){
+    dlg.on=false;hideDlgUI();setTouchUI({show:true});
+    const f=dlgAfter||dlg.after;dlgAfter=null;
+    if(f)f();
+  }else{
+    const L=dlg.lines[dlg.idx];
+    dlg.name=L[0];dlg.spr=L[1]?SPR[L[1]]||null:null;
+    dlg.sprL=L[1]?(SPR[L[1]+'L']||null):null;
+    dlg.typing=true;dlg.timer=0;dlg.full=L[2];dlg.text='';
+  }
+}
+function updateDlg(dt){
+  if(dlg.typing){
+    dlg.timer+=dt*dlg.spd;
+    while(dlg.timer>=1&&dlg.text.length<dlg.full.length){dlg.timer--;dlg.text=dlg.full.slice(0,dlg.text.length+1);}
+    if(dlg.text.length>=dlg.full.length)dlg.typing=false;
+  }
+  if(confirmEdge()&&!tapEdgeConsumed)dlgNext();
+  tapEdge=false;
+}
+function drawDlg(ctx,t){
+  if(dlg.bg&&BGS[dlg.bg])BGS[dlg.bg](ctx,t,0);
+  else{ctx.fillStyle='#05070f';ctx.fillRect(0,0,W,H);}
+  if(dlg.dark){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,W,H);}
+  if(dlg.spr){
+    const sc=5,bob=Math.sin(t*1.6)*3;
+    ctx.save();
+    ctx.globalAlpha=.9;
+    const w=24*sc,h=32*sc;
+    ctx.drawImage(dlg.spr,W/2-w/2,H-h-70+bob,w,h);
+    ctx.restore();
+    ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(W/2,H-70,w*.34,10,0,0,7);ctx.fill();
+  }
+  // 对话框
+  const bx=40,by=H-190,bw=W-80,bh=150;
+  ctx.fillStyle='rgba(6,9,20,.92)';ctx.fillRect(bx,by,bw,bh);
+  ctx.strokeStyle='#4a5f9f';ctx.lineWidth=2;ctx.strokeRect(bx,by,bw,bh);
+  ctx.strokeStyle='rgba(130,160,255,.25)';ctx.strokeRect(bx+4,by+4,bw-8,bh-8);
+  ctx.fillStyle='#ffd98a';ctx.font='bold 19px "Microsoft YaHei",sans-serif';
+  ctx.fillText(dlg.name||'',bx+22,by+32);
+  ctx.fillStyle='#e6ecff';ctx.font='17px "Microsoft YaHei",sans-serif';
+  wrapText(ctx,dlg.text,bx+22,by+62,bw-44,26);
+  ctx.fillStyle=(Math.sin(t*5)>0)?'#8fa3d8':'rgba(143,163,216,.2)';
+  ctx.font='12px sans-serif';ctx.fillText('▼ 点击 / J 继续',bx+bw-150,by+bh-14);
+}
+function wrapText(ctx,text,x,y,maxW,lh){
+  let line='',yy=y;
+  for(const ch of text){
+    if(ctx.measureText(line+ch).width>maxW||ch==='\n'){ctx.fillText(line,x,yy);line=ch==='\n'?'':ch;yy+=lh;}
+    else line+=ch;
+  }
+  if(line)ctx.fillText(line,x,yy);
+}
+
+/* ================= 关卡数据 ================= */
+// 符号: # 墙  . 空  P 出生  G 出口  S 楼梯  B 桥台  ^ 尖刺  ~ 激光区(火)  F 火(美砂战)  K 天台口
+// 小怪: s 科学班兵  g 走钢兵  t 狂暴者  T 拾也(BOSS)  m 蜂鸟机  b 燃烧障碍( baseball 用不到 )
+// 特殊: o 足球/球  h 隐藏点(奈绪提示)
+const LEVELS=[
+ {id:1,name:'第一章 · 学生会的日常',theme:'schoolN',bgm:'calm',player:'nao',time:-1,
+  goal:'capture',brief:'星之海学园放了学，还有一个「能力者」在横行霸道。友利奈绪出击，把对象拍下来！',
+  map:[
+"##############################",
+"#............................#",
+"#...s..............h.........#",
+"#...........####.....####....#",
+"#..####......................#",
+"#........................####.",
+"#.....G......................#",
+"#....####..###....####.......#",
+"#............................#",
+"#..P.........................#",
+"#........####.......####.....#",
+"#............................#",
+"#.....s.........####.........#",
+"#....................s.......#",
+"##############################",
+]},
+ {id:2,name:'第二章 · 附属初中的陷阱',theme:'wild',bgm:'tense',player:'nao',time:-1,
+  goal:'capture',brief:'初中部的空地上，陷阱、晃晃悠悠的钢架……照相机举好，麻药枪上膛。',
+  map:[
+"##############################",
+"#..h.........................#",
+"#.....####.......s...........#",
+"#........................#####",
+"#..s.....^^....####..........#",
+"#####################...#....#",
+"#............................#",
+"#...####..s..........s...####.",
+"#............................#",
+"#....^^..............G.......#",
+"#...######....####...####....#",
+"#............................#",
+"#..P.........s...............#",
+"#........^^^.................#",
+"##############################",
+]},
+ {id:3,name:'第三章 · 美砂的火焰',theme:'city',bgm:'battle',player:'nao',time:-1,
+  goal:'boss',boss:'misa',brief:'Live House 前的空地。黑羽美砂失控暴走——用奈绪的隐身接近，拍下失控的瞬间！',
+  map:[
+"##############################",
+"#............................#",
+"#...T...........h............#",
+"#..###.........####..........#",
+"#.........................F..#",
+"#.F......................###.#",
+"#..###.......................#",
+"#............F...............#",
+"#...F.....................F..#",
+"#............................#",
+"#...####...........####......#",
+"#.P..................G.......#",
+  "#....................#.......#",
+"#.^^....................^^...#",
+"##############################",
+]},
+ {id:4,name:'第四章 · 研究所潜入',theme:'lab',bgm:'tense',player:'yuu',time:-1,
+  goal:'exit',brief:'乙坂有宇只身潜入科学班研究所。夺取能力者的「寄坏」之力，救出隼翼哥哥！',
+  map:[
+"##############################",
+"#....s...........s...........#",
+"#..####.......####......####.#",
+"#............................#",
+"#......s.......g......s......#",
+"#..####......#####....####...#",
+"#..........................G.#",
+  "#..P.......................###",
+"#.......g........s...........#",
+"#...####.....####....####....#",
+"#............................#",
+"#...s........g...........s...#",
+"#..####....#####.....####....#",
+"#............................#",
+"##############################",
+]},
+ {id:5,name:'第五章 · 崩坏之日',theme:'collapse',bgm:'battle',player:'yuu',time:-1,
+  goal:'exit',brief:'崩坏之日。世界陷入恐慌，武装集团突袭学园。穿过混乱，找到高城丈士朗！',
+  map:[
+"##############################",
+"#.....g.........t............#",
+"#..####.......####...........#",
+"#.............^^.............#",
+"#...t.........s.......t......#",
+"#..####......#####...####....#",
+"#............................#",
+"#..P.....t.........s......G..#",
+  "#....^^^..####....####....#..#",
+"#............................#",
+"#....g.......t.......g.......#",
+"#...####....####....####.....#",
+"#............................#",
+"#.....t.............t........#",
+"##############################",
+]},
+ {id:6,name:'终章 · 星之海的约定',theme:'stars',bgm:'tense',player:'yuu',time:-1,
+  goal:'boss',boss:'shadows',brief:'掠夺了全世界能力的高塔之巅——「狂暴者」群的源头。完结这场漫长的战斗！',
+  map:[
+"##############################",
+"#............................#",
+"#...T................T.......#",
+"#..###..............###......#",
+"#............................#",
+"#.......t........t...........#",
+"#..####..........####........#",
+"#.........................G..#",
+  "#..P......................#..#",
+"#...####..t.....t....####....#",
+"#............................#",
+"#.....t.......T......t.......#",
+"#...####....####....####.....#",
+"#............................#",
+"##############################",
+]},
+];
+/* ================= 模式与剧情文本 ================= */
+/* ================= 剧情文本 ================= */
+const CHARS={
+ yuu:['乙坂有宇','yuu'],nao:['友利奈绪','nao'],misa:['黑羽美砂','misa'],joji:['高城丈士朗','joji'],
+ yusa:['西森柚咲','yusa'],kuuro:['熊耳','kuuro'],shun:['乙坂隼翼','shunsuke'],
+ sci:['研究人员','scientist'],troll:['狂暴者','troll'],sys:['？？？',null],
+};
+const STORY={
+ intro:[
+  ['sys',null,'——思春期，是一段灵魂会发生变异的时期。'],
+  ['sys',null,'大约每一万人中，会有一人觉醒不完整、不稳定的能力。'],
+  ['sys',null,'星之海学园——一所收容这些能力者、保护他们的学校。'],
+  ['sys',null,'而学生会的职责，是把滥用能力者找出来，让他们金盆洗手。'],
+  ['nao','nao','我是友利奈绪。学生会的，没听说过吧？我们学生会知名度很低。'],
+  ['nao','nao','今天也有工作。放学后，别想溜。'],
+ ],
+ pre1:[
+  ['nao','nao','目击情报：有一个高年级生，用「瞬间移动」在走廊里抢别人的布丁。'],
+  ['nao','nao','趁他作案的时候拍下来，交给我。然后……我会让他「金盆洗手」。'],
+  ['nao','nao','啊，对了。我的能力是「隐身」——只把自己从别人的视野里消除。'],
+  ['nao','nao','所以只要我贴上来……对方就看不见我了。明白了吗？那就上吧。'],
+ ],
+ post1:[
+  ['yuu','yuu','呜……被拍下来了……这种照片要是发到网上，我的人生就完了……'],
+  ['nao','nao','「瞬间移动」是吧。证据确凿。这样你会被好好处置的。'],
+  ['nao','nao','学生会的工作就是这样——找到、拍下、让滥用能力者收手。'],
+  ['nao','nao','不过，最近有点奇怪。有人目击到「不在名单上的能力者」……'],
+ ],
+ pre2:[
+  ['nao','nao','下一件工作。附属初中那边，有个用「火焰」烧坏花坛的家伙。'],
+  ['nao','nao','不过，也有另一种说法——那孩子是被人逼的。'],
+  ['nao','nao','可疑的是：花坛烧焦的位置，每天都不同。去现场查证。'],
+ ],
+ mid2:[
+  ['nao','nao','果然——烧焦的位置每天移动。这不是一个人的「能力」，是两个人。'],
+  ['misa','misa','喂，那边鬼鬼祟祟的那个。留那么长的头发帘，看不清脸啊。'],
+  ['misa','misa','你在这干什么？该不会……也是来「处理」我的吧？'],
+  ['nao','nao','黑羽美砂。损毁公物、纵火嫌疑。你的能力是「火焰」，对吧。'],
+  ['misa','misa','哈？我从来没在别人面前用过火哦？除了……那一晚。'],
+  ['misa','misa','「烧花坛」——抱歉啊，那不是我。是另一个和我能力「共通」的家伙。'],
+  ['nao','nao','……共通？两个能力者，能力相同？'],
+  ['misa','misa','谁知道呢。反正花坛不关我事，但敢把脏水泼我头上——'],
+  ['misa','misa','就别怪我用这「不完整的能力」招待你了！'],
+ ],
+ post2:[
+  ['misa','misa','呼……打住了打住了。再打下去，这件外套就烧没了。'],
+  ['misa','misa','照片随便你拿去。反正我没烧花坛，问心无愧。'],
+  ['nao','nao','……作为学生会的成员，我收回之前的怀疑。抱歉。'],
+  ['misa','misa','哈，学生会居然会道歉？有意思。下次带你去 Live House，我请客。'],
+  ['nao','nao','（这个人……和她妹妹西森柚咲一点都不像。不过——不讨厌。）'],
+ ],
+ post2b:[
+  ['misa','misa','话说回来，你和柚咲……不，和我长得有点像的某人，到底是怎么回事？'],
+  ['nao','nao','URS 的档案里可能藏着答案。星之海学园的地下，有一间旧研究室。'],
+  ['misa','misa','……行吧。这种事，总得有个了断。我陪你们走一趟。'],
+ ],
+ postBB:[
+  ['yusa','yusa','哇——前辈好厉害！完全打中了我的球！'],
+  ['yuu','yuu','呼……手都麻了。和「非人类」的球速对战，可不好受啊。'],
+  ['yusa','yusa','嘿嘿，那是因为我有「血脉」嘛！啊，对了对了——'],
+  ['yusa','yusa','姐姐说，研究所的线索有进展了！大家集合！'],
+ ],
+ pre3:[
+  ['nao','nao','URS 调查的档案里，写着美砂和柚咲的「诞生秘密」。'],
+  ['nao','nao','科学家想利用思春期能力者做实验，母亲带着双胞胎逃了出来……'],
+  ['nao','nao','而追上来的研究人员，在崩塌的隧道里——和姐妹俩一起「消失」了。'],
+  ['nao','nao','第二位「狂暴者」是否已经出现？必须尽快找到答案。'],
+ ],
+ pre4:[
+  ['yuu','yuu','我叫乙坂有宇。曾经是个只靠「夺取」别人能力过日子的最底层。'],
+  ['yuu','yuu','直到遇到奈绪、美砂、柚咲、高城……我第一次觉得，能力是用来「守护」的。'],
+  ['yuu','yuu','但是科学班盯上了我们。哥哥乙坂隼翼，因为保护我，被抓走了。'],
+  ['yuu','yuu','熊耳先生告诉了我研究所的位置。这一次——是我去救他。'],
+  ['yuu','yuu','我的能力「掠夺」，只有接触对方身体才能生效。近身，然后夺走一切。'],
+  ['kuuro','kuuro','有宇，先说好——研究所里全是「强化兵」。别硬拼，用你的脑子。'],
+  ['yuu','yuu','熊耳先生……你到底是什么人？为什么总是知道这些？'],
+  ['kuuro','kuuro','哈哈，我是社畜，只是个社畜。走吧，时间不多。'],
+ ],
+ post4:[
+  ['shun','shunsuke','……有宇。你真的来了。'],
+  ['yuu','yuu','哥！都怪我……都是因为我，你才——'],
+  ['shun','shunsuke','抬起头来，有宇。「时间跳跃」的代价，是我的眼睛。但我从未后悔保护你。'],
+  ['shun','shunsuke','听着，有宇。研究所的最终目的——是把所有能力者的能力「掠夺」到一个人身上。'],
+  ['shun','shunsuke','如果让他们完成……世界将只剩下一个人。剩下那个，谁也不是的「神」。'],
+  ['shun','shunsuke','崩坏之日已经在倒计时。带着我的能力去吧，有宇。'],
+  ['yuu','yuu','哥的力量和眼睛……我都收下了。我会终结这一切。'],
+ ],
+ pre5:[
+  ['joji','joji','崩坏之日——我在「未来」经历过的那一天，终于还是来了。'],
+  ['joji','joji','武装集团袭击学园、世界陷入恐慌、能力者被当成实验品……全都发生了。'],
+  ['joji','joji','有宇！快！从侧门离开学园——研究人员已经在往这边走了！'],
+  ['yuu','yuu','高城前辈，那你呢？'],
+  ['joji','joji','我是「疾风」的男人！跑在你前面的路，我来开！去汇合点！'],
+  ['kuuro','kuuro','（高城的时间跳跃已经到极限了……这个未来，他看过太多次了。）'],
+  ['kuuro','kuuro','（这一次，一定要改变结局。拜托了——乙坂有宇。）'],
+ ],
+ mid5:[
+  ['joji','joji','呼……这边安全了。有宇，接下来是最后的战场。'],
+  ['joji','joji','塔的顶端——掠夺了全世界能力的「狂暴者」的本体，在那里等着。'],
+  ['yuu','yuu','为什么……要夺走所有人的能力？'],
+  ['joji','joji','因为「寂寞」吧。谁都一样——能力者，都太寂寞了。'],
+  ['joji','joji','走吧。去告诉他——不用成为「神」，也有人会来接你。'],
+ ],
+ pre6:[
+  ['yuu','yuu','塔的顶端。掠夺了全世界的能力……所谓「神」的摇篮。'],
+  ['troll','troll','……来了啊，同族。你是来夺走我的一切的吗？还是来，加入我？'],
+  ['yuu','yuu','我来——带回去。被你夺走的所有人的一切，还有这个世界的明天！'],
+  ['troll','troll','世界？那种东西，早就抛弃我了。我只要……不再是「一个人」。'],
+  ['yuu','yuu','（他的能力已经失控，空间边缘在崩塌。速战速决——全部，掠夺！）'],
+ ],
+ post6:[
+  ['troll','troll','啊……好温暖。原来，被夺走之后，是这种感觉吗……'],
+  ['yuu','yuu','……你只是想有人来接你。对不起，我们来晚了。'],
+  ['yuu','yuu','我夺走的能力，会全部交还给这个世界。一个不少。'],
+  ['yuu','yuu','而你的份——由我来记住。你也是……真的存在过的。'],
+  ['sys',null,'——思春期结束，能力消失。少年们的战斗，就此落幕。'],
+  ['sys',null,'友利奈绪和乙坂有宇，回到了普通的日常。'],
+  ['nao','nao','呐，有宇。梦这种东西……要一直做下去才行哦。'],
+  ['yuu','yuu','嗯。这一次的梦，特别长。'],
+  ['sys',null,'—— Charlotte：那颗彗星的名字。思念着「另一个自己」的星之海的故事。'],
+  ['sys',null,'【完结】感谢游玩！'],
+ ],
+ fail:[
+  ['sys',null,'……意识沉入黑暗。但故事，还没有结束。'],
+ ],
+};
+
+/* ================= 动作关卡 ================= */
+let LV=null,PL=null,cam=0,camY=0,ents=[],shots=[],parts=[],floats=[],exitDoor=null,capTarget=null;
+let invuln=0,freezeT=0,winT=0,failT=0,introT=0,ldg={};
+function gravityOf(){return 1450;}
+const keysWall={};
+function loadLevel(i,skipBrief){
+  const L=LEVELS[i];LV=L;
+  ents=[];shots=[];parts=[];floats=[];capTarget=null;winT=0;failT=0;freezeT=0;ldg={};
+  const rows=L.map;LV.cw=rows[0].length*TS;LV.ch=rows.length*TS;
+  LV.sol=new Set();
+  for(let r=0;r<rows.length;r++)for(let c=0;c<rows[r].length;c++){
+    const ch=rows[r][c],x=c*TS,y=r*TS;
+    if(ch==='#')LV.sol.add(c+','+r);
+    else if(ch==='P')LV.spawn=[x+4,y+2];
+    else if(ch==='G')exitDoor={x,y:y-TS+TS,w:TS,h:TS*1.6};
+    else if(ch==='^')ents.push(mkSpikes(x,y));
+    else if(ch==='F')ents.push(mkFire(x,y));
+    else if(ch==='s')ents.push(mkEnemy('soldier',x,y));
+    else if(ch==='g')ents.push(mkEnemy('golem',x,y));
+    else if(ch==='t')ents.push(mkEnemy('troll',x,y));
+    else if(ch==='m')ents.push(mkEnemy('bird',x,y));
+    else if(ch==='T')ents.push(mkEnemy(L.boss||'misa',x,y));
+    else if(ch==='h')ldg[c+','+r]=true;
+  }
+  PL=mkPlayer(L.player);
+  PL.x=LV.spawn[0];PL.y=LV.spawn[1];
+  cam=clamp(PL.x-W/2,0,Math.max(0,LV.cw-W));camY=clamp(PL.y-H/2,0,Math.max(0,LV.ch-H));
+  invuln=1;introT=1.2;
+  state='play';setMood(L.bgm);
+  if(!skipBrief)toast(L.name,L.brief);
+  setTouchUI(L.player==='nao'?{show:true,atk:'拍',abi:'瞬',sub:'隐'}
+    :L.player==='yuu'?{show:true,atk:'击',abi:'夺',sub:'时'}:{show:true,atk:'击',abi:'火',sub:'隐'});
+  // HUD 每帧绘制
+}
+function solidAt(x,y){
+  const c=Math.floor(x/TS),r=Math.floor(y/TS);
+  if(x<0||x>=LV.cw||y>=LV.ch)return true;
+  if(y<0)return false;
+  return LV.sol.has(c+','+r);
+}
+function rectHitsSolid(x,y,w,h){
+  const x0=Math.floor(x/TS),x1=Math.floor((x+w-0.01)/TS);
+  const y0=Math.floor(y/TS),y1=Math.floor((y+h-0.01)/TS);
+  for(let r=y0;r<=y1;r++)for(let c=x0;c<=x1;c++){
+    if(x<0||x+w>LV.cw||y+h>LV.ch)return true;
+    if(r>=0&&LV.sol.has(c+','+r))return true;
+  }
+  return false;
+}
+function moveBody(b,dt){
+  b.onGround=false;
+  let nx=b.x+b.vx*dt;
+  if(!rectHitsSolid(nx,b.y,b.w,b.h))b.x=nx;
+  else{const step=b.vx>0?1:-1;while(!rectHitsSolid(b.x+step,b.y,b.w,b.h))b.x+=step;b.vx=0;b.hitWall=true;}
+  let ny=b.y+b.vy*dt;
+  if(!rectHitsSolid(b.x,ny,b.w,b.h))b.y=ny;
+  else{
+    const step=b.vy>0?1:-1;
+    while(!rectHitsSolid(b.x,b.y+step,b.w,b.h))b.y+=step;
+    if(b.vy>0)b.onGround=true;
+    b.vy=0;
+  }
+}
+function mkPlayer(kind){
+  return {kind,x:0,y:0,w:16,h:28,vx:0,vy:0,face:1,onGround:false,hp:5,maxHp:5,
+    invis:false,invisT:0,abilCd:0,dashT:0,flashT:0,anim:0,atkT:0,capFlash:0,
+    stolen:{},jumpBuf:0,coyote:0,dead:false};
+}
+function mkSpikes(x,y){return {type:'spike',x,y:y+TS-14,w:TS,h:14};}
+function mkFire(x,y){return {type:'fire',x:x+4,y:y+8,w:TS-8,h:TS-8,t:R()*6};}
+function mkEnemy(kind,x,y){
+  const base={type:'enemy',kind,x,y,w:16,h:26,vx:0,vy:0,face:-1,anim:0,home:x,dead:false,hp:2,flashT:0,stun:0,t:R()*7};
+  if(kind==='soldier')Object.assign(base,{hp:2,spd:55,patrol:true});
+  if(kind==='golem')Object.assign(base,{hp:3,spd:34,patrol:true,w:20,h:28});
+  if(kind==='troll')Object.assign(base,{hp:4,spd:70,aggro:true,w:18,h:28});
+  if(kind==='bird')Object.assign(base,{hp:1,spd:80,fly:true,w:18,h:14});
+  if(kind==='misa')Object.assign(base,{hp:14,boss:true,bossKind:'misa',spd:88,w:18,h:28,name:'黑羽美砂',dashCd:2,fireCd:1.4});
+  if(kind==='shadows')Object.assign(base,{hp:20,boss:true,bossKind:'shadows',spd:60,w:24,h:30,name:'最后的狂暴者',dashCd:2.2,fireCd:1.8,tp:0});
+  return base;
+}
+function toast(title,body){
+  const d=document.createElement('div');
+  d.style.cssText='position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:8;'+
+    'background:rgba(8,12,28,.9);border:1px solid #3b4f8f;border-radius:10px;padding:10px 22px;'+
+    'color:#dfe8ff;text-align:center;max-width:80vw;pointer-events:none;transition:opacity .6s';
+  d.innerHTML='<div style="font-size:17px;color:#ffd98a;letter-spacing:2px">'+title+'</div>'+
+    '<div style="font-size:12px;color:#aebadb;margin-top:4px;white-space:pre-line">'+body+'</div>';
+  wrapEl.appendChild(d);
+  setTimeout(()=>{d.style.opacity='0';},3200);
+  setTimeout(()=>{d.remove();},4000);
+}
+function addFloat(x,y,txt,col){floats.push({x,y,txt,col:col||'#ffd98a',t:1});}
+function burst(x,y,col,n,spd){
+  for(let i=0;i<(n||8);i++){
+    const a=R()*6.28,s=(spd||120)*(.4+R()*.8);
+    parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,t:.5+R()*.3,col});
+  }
+}
+function hurtPlayer(n,src){
+  if(PL.dead||invuln>0||PL.dashT>0)return;
+  PL.hp-=n;invuln=1.1;PL.flashT=.4;
+  if(src){PL.vx=(PL.x<src.x?-1:1)*-190;PL.vy=-230;}
+  shake=.4;sfx('hurt');
+  burst(PL.x+8,PL.y+14,'#ff8a8a',6);
+  if(PL.hp<=0){
+    PL.dead=true;PL.vy=-320;sfx('pdeath');setMood('sad');
+    setTimeout(()=>{if(state==='play'&&PL.dead)doFail();},1200);
+  }
+}
+function doFail(){
+  if(winT>0)return;
+  state='dialog';failT=1;
+  say(LV.theme,'sad',STORY.fail,()=>{showResult(false);});
+}
+function doWin(){
+  if(winT>0)return;
+  winT=0.01;freezeT=1.6;shake=.3;sfx('fanfare');
+  save.u=Math.max(save.u,LV.id+1);if(LV.id>=LEVELS.length)save.clear=true;store();
+}
+function afterWin(){
+  const id=LV.id;
+  if(id===1)seqDialog('post1',()=>chapterSelect());
+  else if(id===2)seqDialog('post2',()=>showBaseballIntro());
+  else if(id===3)seqDialog('post2b',()=>chapterSelect());
+  else if(id===4)seqDialog('post4',()=>chapterSelect());
+  else if(id===5)seqDialog('mid5',()=>chapterSelect());
+  else showEnding();
+}
+function seqDialog(key,next){
+  if(!STORY[key]){next&&next();return;}
+  const lines=STORY[key];
+  const mood=(key==='post6')?'hope':(key==='fail'?'sad':'calm');
+  say(LV?LV.theme:'schoolN',mood,lines,next);
+}
+function enemyHitPlayer(e){
+  if(PL.invis&&e.kind!=='misa'&&e.kind!=='shadows')return false;
+  return overlap(PL,e);
+}
+function overlap(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
+/* ================= 更新：玩家/敌人 ================= */
+function updatePlayer(dt){
+  if(PL.dead){PL.vy+=gravityOf()*dt;moveBody(PL,dt);return;}
+  const p=PL;
+  const ax=axIn();
+  const spd=(p.invis?168:150);
+  p.vx=lerp(p.vx,ax*spd,1-Math.pow(.0004,dt));
+  if(ax)p.face=ax>0?1:-1;
+  p.anim+=Math.abs(p.vx)*dt*.05+(p.onGround?0:dt*2);
+  // 跳跃（土狼时间+缓冲）
+  if(jumpEdge())p.jumpBuf=.12;
+  p.jumpBuf-=dt;p.coyote=p.onGround?.1:p.coyote-dt;
+  if(p.jumpBuf>0&&p.coyote>0){p.vy=-680;p.jumpBuf=0;p.coyote=0;sfx('jump');}
+  if(!jumpHeld()&&p.vy<-160)p.vy=-160;
+  p.vy+=gravityOf()*dt;p.vy=Math.min(p.vy,760);
+  moveBody(p,dt);
+  if(p.x<0)p.x=0;if(p.x+p.w>LV.cw)p.x=LV.cw-p.w;
+  if(p.y>LV.ch+80){p.hp=0;doFail();return;}
+  // 攻击
+  if(p.atkT>0)p.atkT-=dt;
+  if(atkEdge()&&p.atkT<=0){
+    p.atkT=.28;sfx('swing');
+    const hx=p.x+(p.face>0?p.w:-26),hy=p.y+4;
+    parts.push({x:hx+13,y:hy+10,vx:p.face*60,vy:-20,t:.18,col:'#fff',r:14});
+    for(const e of ents){
+      if(e.dead||e.type!=='enemy')continue;
+      if(overlap({x:hx,y:hy,w:26,h:22},e)){
+        const dmg=p.kind==='nao'?1:2;
+        hurtEnemy(e,dmg,p.face*160);
+        if(p.kind==='nao'&&e.hp<=0&&!e.boss&&!e.captured){
+          e.captured=true;addFloat(e.x+8,e.y-6,'◉ 拍到了！','#8fd6ff');sfx('pickup');
+        }
+      }
+    }
+    // 取证关卡：拍下所有目标即完成
+    if(LV.goal==='capture'){
+      const alive=ents.filter(e=>e.type==='enemy'&&!e.boss&&!e.captured);
+      if(alive.length===0)doWin();
+    }
+  }
+  // 技能
+  if(p.abilCd>0)p.abilCd-=dt;
+  if(p.invisT>0){p.invisT-=dt;p.invis=p.invisT>0;}
+  if(abiEdge()&&p.abilCd<=0){
+    if(p.kind==='nao'){ // 隐身+短突进
+      p.invisT=3;p.abilCd=2.6;sfx('dash');burst(p.x+8,p.y+14,'#bcd2ff',10);
+      p.vx=p.face*380;p.dashT=.16;
+    }else if(p.kind==='yuu'){ // 掠夺
+      p.abilCd=1.1;sfx('possess');
+      let got=false;
+      for(const e of ents){
+        if(e.dead||e.type!=='enemy')continue;
+        if(overlap({x:p.x-14,y:p.y-14,w:p.w+28,h:p.h+28},e)&&!e.boss){
+          e.stun=2.4;e.flashT=.3;got=true;
+          addFloat(e.x+4,e.y-8,'掠夺!','#aef2ff');
+          burst(e.x+8,e.y+12,'#aef2ff',10,160);
+        }
+      }
+      if(!got)addFloat(p.x+8,p.y-10,'未接触…','#8fa3d8');
+    }
+  }
+  if(subEdge()&&p.abilCd<=0&&p.kind==='nao'){p.abilCd=.8;p.dashT=.2;p.vx=p.face*430;sfx('dash');}
+  if(subEdge()&&p.kind==='yuu'){ // 时间跳跃：闪现
+    if(p.abilCd<=0){
+      p.abilCd=2.4;sfx('timeleap');
+      burst(p.x+8,p.y+14,'#ffd98a',8);
+      p.x+=p.face*110;p.y-=8;
+      let tries=0;while(rectHitsSolid(p.x,p.y,p.w,p.h)&&tries++<40)p.y-=8;
+      burst(p.x+8,p.y+14,'#ffd98a',8);
+    }
+  }
+  if(p.dashT>0){p.dashT-=dt;p.vy=0;}
+  if(invuln>0)invuln-=dt;
+  if(p.flashT>0)p.flashT-=dt;
+  if(p.capFlash>0)p.capFlash-=dt;
+  // 危险物
+  for(const e of ents){
+    if(e.dead)continue;
+    if(e.type==='spike'&&overlap(p,e))hurtPlayer(1,null);
+    if(e.type==='fire'&&overlap(p,e))hurtPlayer(1,e);
+  }
+  // 出口判定
+  if(exitDoor&&overlap(p,exitDoor)&&LV.goal!=='capture')doWin();
+}
+function hurtEnemy(e,dmg,kb){
+  if(e.dead)return;
+  e.hp-=dmg;e.flashT=.18;
+  if(kb){e.vx=kb*(e.boss?.3:1);e.vy=-120;}
+  sfx('hit');burst(e.x+e.w/2,e.y+e.h/2,'#ffd0a0',5,90);
+  if(e.hp<=0){
+    e.dead=true;sfx('edeath');shake=.22;
+    burst(e.x+e.w/2,e.y+e.h/2,'#ffb36a',14,190);
+    if(e.boss){
+      sfx('boom');shake=.7;
+      addFloat(e.x,e.y-14,'——掠夺！','#ffd98a');
+      setTimeout(()=>{if(state==='play')doWin();},700);
+    }else if(PL.kind==='yuu'&&e.kind!=='bird'){
+      addFloat(e.x+4,e.y-8,'+能力','#aef2ff');
+    }
+  }
+}
+function updateEnemy(e,dt){
+  if(e.dead)return;
+  if(e.flashT>0)e.flashT-=dt;
+  if(e.stun>0){e.stun-=dt;e.vx*=.86;e.vy+=gravityOf()*dt;moveBody(e,dt);return;}
+  e.t+=dt;
+  const seeP=!PL.dead&&!PL.invis&&(Math.abs(PL.y-e.y)<70);
+  if(e.fly){
+    // 蜂鸟机：正弦飞行
+    e.x=e.home+Math.sin(e.t*1.4)*80;e.y+=Math.cos(e.t*2.1)*36*dt*2;
+    e.face=Math.sin(e.t*1.4)>0?1:-1;
+    if(seeP&&R()<dt*.35){shoot(e,PL.x,PL.y);}
+    return;
+  }
+  if(e.boss){updateBoss(e,dt);return;}
+  const distP=PL.x-e.x;
+  if(e.aggro&&seeP&&Math.abs(distP)<330){
+    e.face=distP>0?1:-1;
+    e.vx=e.face*e.spd;
+    if(e.kind==='troll'&&e.onGround&&R()<dt*.7){e.vy=-420;sfx('jump');}
+  }else{
+    e.vx=e.face*e.spd*.7;
+    if(e.hitWall||e.x<e.home-140||e.x>e.home+140||!oga(e))e.face*=-1,e.hitWall=false;
+  }
+  e.vy+=gravityOf()*dt;e.vy=Math.min(e.vy,700);
+  moveBody(e,dt);
+  if(enemyHitPlayer(e))hurtPlayer(1,e);
+}
+function oga(e){ // on ground ahead
+  const ax=e.x+(e.face>0?e.w+4:-6),ay=e.y+e.h+4;
+  return rectHitsSolid(ax,ay,2,2);
+}
+function updateBoss(e,dt){
+  const distP=PL.x-e.x,dx=Math.abs(distP),seeP=!PL.dead;
+  e.face=distP>0?1:-1;
+  if(e.bossKind==='misa'){
+    e.dashCd-=dt;e.fireCd-=dt;
+    if(seeP&&e.fireCd<=0&&dx<430){
+      e.fireCd=1.5+R();
+      const n=3;
+      for(let i=0;i<n;i++){
+        const a=Math.atan2((PL.y+10)-(e.y+8),(PL.x)-(e.x))+(i-1)*.28;
+        shots.push({x:e.x+e.w/2,y:e.y+8,vx:Math.cos(a)*230,vy:Math.sin(a)*230,hostile:true,fire:true,t:2.2});
+      }
+      sfx('fire');
+    }
+    if(e.onGround&&e.dashCd<=0&&(dx>150||!seeP)){
+      e.dashCd=1.6+R()*.8;e.vx=e.face*330;e.vy=-300;sfx('fire');
+      burst(e.x+9,e.y+10,'#ff9a5a',8);
+    }else e.vx=lerp(e.vx,e.face*e.spd*(seeP?1:.4),.1);
+    e.vy+=gravityOf()*dt;moveBody(e,dt);
+    // 燃烧光柱提示
+    if(R()<dt*2)burst(e.x+9,e.y+4,'#ffb36a',1,40);
+  }else if(e.bossKind==='shadows'){
+    e.dashCd-=dt;e.fireCd-=dt;e.tp-=dt;
+    if(seeP&&e.fireCd<=0){
+      e.fireCd=1.3+R()*.6;
+      for(let i=-1;i<=1;i++){
+        const a=Math.atan2((PL.y+12)-(e.y+10),PL.x-e.x)+i*.35;
+        shots.push({x:e.x+e.w/2,y:e.y+10,vx:Math.cos(a)*250,vy:Math.sin(a)*250,hostile:true,dark:true,t:2.4});
+      }
+      sfx('fire');
+    }
+    if(e.onGround&&e.tp<=0){
+      e.tp=2.6+R();sfx('timeleap');
+      burst(e.x+12,e.y+14,'#c0a6ff',12,150);
+      for(let k=0;k<30;k++){
+        const nx=PL.x+(R()<.5?-1:1)*(90+R()*70),ny=PL.y;
+        if(!rectHitsSolid(nx,ny-20,e.w,e.h)){e.x=nx;e.y=ny-20;break;}
+      }
+      burst(e.x+12,e.y+14,'#c0a6ff',12,150);
+    }
+    if(e.onGround&&e.dashCd<=0){e.dashCd=1.4+R();e.vx=e.face*360;e.vy=-260;}
+    else e.vx=lerp(e.vx,e.face*e.spd,.08);
+    e.vy+=gravityOf()*dt;moveBody(e,dt);
+    if(R()<dt*3)burst(e.x+R()*e.w,e.y+R()*e.h,'#8a6aff',1,30);
+  }
+  if(overlap(PL,e))hurtPlayer(1,e);
+}
+function shoot(e,tx,ty){
+  const a=Math.atan2(ty-(e.y+6),tx-(e.x+e.w/2));
+  shots.push({x:e.x+e.w/2,y:e.y+6,vx:Math.cos(a)*210,vy:Math.sin(a)*210,hostile:true,t:2.4});
+  sfx('shoot');
+}
+function updateShots(dt){
+  for(const s of shots){
+    s.t-=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;
+    if(s.fire){s.vy-=120*dt;}
+    if(s.dark)s.vx+=Math.sign(s.vx||1)*40*dt;
+    if(s.t<=0||rectHitsSolid(s.x-2,s.y-2,4,4)){s.t=0;s.dead=true;burst(s.x,s.y,s.fire?'#ffb36a':'#a0a8ff',4,60);continue;}
+    if(!PL.dead&&overlap({x:s.x-3,y:s.y-3,w:6,h:6},PL)){
+      s.dead=true;s.t=0;hurtPlayer(1,{x:s.x,y:s.y});
+    }
+  }
+  shots=shots.filter(s=>!s.dead);
+}
+/* ================= 渲染 ================= */
+function drawSprite(ctx,spr,x,y,face,opts){
+  opts=opts||{};
+  const sc=opts.sc||1.3;
+  ctx.save();
+  ctx.translate(x, y);
+  if(face<0)ctx.scale(-1,1),ctx.translate(-24*sc,0);
+  const img=(face<0)?(SPR[spr+'L']||SPR[spr]):SPR[spr];
+  if(opts.invis)ctx.globalAlpha=.16;
+  if(opts.flash){ctx.filter='brightness(3)';}
+  ctx.drawImage(img,0,0,24*sc,32*sc);
+  ctx.restore();
+}
+function drawPlay(ctx,t){
+  const L=LV;
+  BGS[L.theme](ctx,t,cam);
+  ctx.save();
+  const sx=shake>0?(R()-.5)*shake*14:0,sy=shake>0?(R()-.5)*shake*10:0;
+  ctx.translate(-cam+sx,-camY+sy);
+  // 隐藏点微光
+  for(const key in ldg){
+    const [c,r]=key.split(',').map(Number);
+    const gx=c*TS,gy=r*TS;
+    ctx.fillStyle='rgba(140,200,255,'+(.1+.08*Math.sin(t*3+c))+')';
+    ctx.fillRect(gx+8,gy+10,20,22);
+  }
+  // 平台
+  const c0=Math.max(0,Math.floor(cam/TS)-1),c1=Math.min(Math.ceil(LV.cw/TS),Math.floor((cam+W)/TS)+1);
+  const r0=Math.max(0,Math.floor(camY/TS)-1),r1=Math.min(ROWS,Math.floor((camY+H)/TS)+1);
+  for(let r=r0;r<r1;r++)for(let c=c0;c<c1;c++){
+    if(LV.sol.has(c+','+r))drawPlat(ctx,c*TS,r*TS,TS,TS,L.theme);
+  }
+  // 门/出口
+  if(exitDoor&&L.goal!=='capture'){
+    const d=exitDoor;
+    ctx.fillStyle=L.theme==='lab'?'#39d0a8':'#ffd98a';
+    ctx.globalAlpha=.25+.15*Math.sin(t*3);
+    ctx.fillRect(d.x-4,d.y-10,d.w+8,d.h+14);
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#141a2e';ctx.fillRect(d.x+4,d.y+4,d.w-8,d.h-2);
+    ctx.fillStyle='#ffd98a';ctx.font='bold 11px sans-serif';ctx.fillText('出口',d.x+3,d.y-2);
+  }
+  // 实体
+  for(const e of ents){
+    if(e.dead)continue;
+    if(e.type==='spike'){
+      ctx.fillStyle='#8a94b8';
+      for(let i=0;i<3;i++){
+        ctx.beginPath();ctx.moveTo(e.x+i*12,e.y+e.h);ctx.lineTo(e.x+i*12+6,e.y);ctx.lineTo(e.x+i*12+12,e.y+e.h);ctx.fill();
+      }
+    }else if(e.type==='fire'){
+      ctx.fillStyle='rgba(255,120,40,'+(.75+.2*Math.sin(t*9+e.t))+')';
+      ctx.beginPath();
+      ctx.moveTo(e.x,e.y+e.h);
+      ctx.quadraticCurveTo(e.x+e.w/2+Math.sin(t*11+e.t)*3,e.y-8,e.x+e.w,e.y+e.h);
+      ctx.fill();
+      ctx.fillStyle='rgba(255,220,120,.9)';
+      ctx.beginPath();
+      ctx.moveTo(e.x+4,e.y+e.h);
+      ctx.quadraticCurveTo(e.x+e.w/2+Math.sin(t*13+e.t)*2,e.y+4,e.x+e.w-4,e.y+e.h);
+      ctx.fill();
+    }else if(e.type==='enemy'){
+      const spr={soldier:'soldier',golem:'golem',troll:'troll',bird:'soldier',misa:'misa',shadows:'troll'}[e.kind]||'soldier';
+      if(e.kind==='bird'){
+        ctx.save();
+        ctx.translate(e.x+9,e.y+7+Math.sin(t*6+e.t)*3);
+        ctx.fillStyle='#5c6a8a';
+        const fl=Math.sin(t*18)>0?6:-6;
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-13,fl);ctx.lineTo(-4,4);ctx.fill();
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(13,fl);ctx.lineTo(4,4);ctx.fill();
+        ctx.fillStyle='#7a8aaa';ctx.fillRect(-6,-3,12,7);
+        ctx.fillStyle='#ff7a7a';ctx.fillRect(3,-1,3,2);
+        ctx.restore();
+      }else{
+        drawSprite(ctx,spr,e.x-(e.boss?7:4),e.y-(e.boss?6:4),e.face,{flash:e.flashT>0});
+        if(e.stun>0){
+          ctx.fillStyle='#aef2ff';ctx.font='10px sans-serif';
+          ctx.fillText('✦',e.x+2+Math.sin(t*9)*4,e.y-8);
+        }
+      }
+      if(e.boss){
+        ctx.fillStyle='rgba(10,14,30,.8)';ctx.fillRect(e.x-30,e.y-26,80,8);
+        ctx.fillStyle='#ff6a6a';ctx.fillRect(e.x-29,e.y-25,78*(e.hp/(e.bossKind==='misa'?14:20)),6);
+        ctx.fillStyle='#ffd98a';ctx.font='bold 11px sans-serif';
+        ctx.fillText(e.name,e.x-30,e.y-30);
+      }else{
+        ctx.fillStyle='rgba(10,14,30,.7)';ctx.fillRect(e.x,e.y-8,e.w,4);
+        ctx.fillStyle='#8fd6ff';ctx.fillRect(e.x+1,e.y-7,(e.w-2)*(e.hp/(e.kind==='golem'?3:e.kind==='troll'?4:2)),2);
+      }
+      if(PL.kind==='nao'&&!e.boss&&!e.captured&&Math.abs(PL.x-e.x)<130&&Math.abs(PL.y-e.y)<90){
+        ctx.fillStyle='rgba(143,214,255,'+(.5+.4*Math.sin(t*6))+')';
+        ctx.font='10px sans-serif';ctx.fillText('◎',e.x+4,e.y-12);
+      }
+    }
+  }
+  // 飞行道具
+  for(const s of shots){
+    if(s.fire){
+      ctx.fillStyle='#ffb36a';ctx.beginPath();ctx.arc(s.x,s.y,5,0,7);ctx.fill();
+      ctx.fillStyle='#fff0c0';ctx.beginPath();ctx.arc(s.x,s.y,2.4,0,7);ctx.fill();
+    }else if(s.dark){
+      ctx.fillStyle='#8a6aff';ctx.beginPath();ctx.arc(s.x,s.y,5.5,0,7);ctx.fill();
+      ctx.fillStyle='#d8ccff';ctx.beginPath();ctx.arc(s.x,s.y,2.6,0,7);ctx.fill();
+    }else{
+      ctx.fillStyle='#ffe28a';ctx.fillRect(s.x-3,s.y-1.5,6,3);
+    }
+  }
+  // 玩家
+  if(!PL.dead){
+    const spr=PL.kind==='nao'?'nao':'yuu';
+    const bob=PL.onGround&&Math.abs(PL.vx)>20?Math.sin(t*16)*1.2:0;
+    if(PL.atkT>0){
+      ctx.strokeStyle='rgba(255,255,255,'+(PL.atkT/.28)+')';ctx.lineWidth=3;
+      ctx.beginPath();
+      ctx.arc(PL.x+8,PL.y+12,PL.kind==='nao'?24:22,PL.face>0?-.9:2.2,PL.face>0?.9:4);
+      ctx.stroke();
+    }
+    if(PL.invisT>0){
+      ctx.save();ctx.globalAlpha=.5+.3*Math.sin(t*8);
+      ctx.fillStyle='#bcd2ff';ctx.beginPath();ctx.ellipse(PL.x+8,PL.y+14,13,17,0,0,7);ctx.fill();
+      ctx.restore();
+    }
+    drawSprite(ctx,spr,PL.x-4,PL.y-4+bob,PL.face,{invis:PL.invisT>0,flash:PL.flashT>0||(invuln>0&&Math.sin(t*30)>0)});
+  }
+  // 粒子
+  for(const p of parts){
+    ctx.globalAlpha=clamp(p.t*2,0,1);
+    ctx.fillStyle=p.col;
+    if(p.r)ctx.fillRect(p.x-p.r,p.y-p.r,p.r*2,p.r*2);
+    else ctx.fillRect(p.x-2,p.y-2,4,4);
+    ctx.globalAlpha=1;
+  }
+  // 浮动文字
+  for(const f of floats){
+    ctx.globalAlpha=clamp(f.t*1.6,0,1);
+    ctx.fillStyle=f.col;ctx.font='bold 13px "Microsoft YaHei",sans-serif';
+    ctx.fillText(f.txt,f.x,f.y-(1-f.t)*24);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+  if(PL.y>LV.ch-40){ctx.fillStyle='rgba(255,90,90,'+(.4+.3*Math.sin(t*10))+')';ctx.fillRect(0,H-8,W,8);}
+  drawHud(ctx);
+  if(PL.capFlash>0){
+    ctx.fillStyle='rgba(255,255,255,'+PL.capFlash+')';ctx.fillRect(0,0,W,H);
+  }
+}
+function drawHud(ctx){
+  ctx.fillStyle='rgba(8,12,28,.65)';ctx.fillRect(12,12,150,30);
+  ctx.strokeStyle='#3b4f8f';ctx.strokeRect(12,12,150,30);
+  ctx.font='11px sans-serif';ctx.fillStyle='#8fa3d8';
+  ctx.fillText(PL.kind==='nao'?'友利奈绪':'乙坂有宇',20,24);
+  for(let i=0;i<PL.maxHp;i++){
+    ctx.fillStyle=i<PL.hp?'#ff8a8a':'#2a3050';
+    ctx.fillRect(20+i*13,28,10,8);
+  }
+  ctx.fillStyle='rgba(8,12,28,.65)';ctx.fillRect(12,48,110,22);
+  ctx.strokeStyle='#3b4f8f';ctx.strokeRect(12,48,110,22);
+  ctx.fillStyle=PL.abilCd<=0?'#8fd6ff':'#39406a';
+  ctx.fillRect(14,50,106*clamp(1-PL.abilCd/(PL.kind==='nao'?2.6:2.4),0,1),18);
+  ctx.fillStyle=PL.abilCd<=0?'#0a0e1f':'#6a729a';ctx.font='bold 11px sans-serif';
+  ctx.fillText(PL.kind==='nao'?'隐身 K':'掠夺 K',18,62);
+  if(PL.invisT>0){
+    ctx.fillStyle='#bcd2ff';ctx.font='11px sans-serif';
+    ctx.fillText('隐身 '+PL.invisT.toFixed(1)+'s',130,62);
+  }
+  ctx.fillStyle='rgba(8,12,28,.65)';ctx.fillRect(W-190,12,178,24);
+  ctx.strokeStyle='#3b4f8f';ctx.strokeRect(W-190,12,178,24);
+  ctx.fillStyle='#cdd6f4';ctx.font='11px sans-serif';
+  ctx.fillText(LV.name,W-182,28);
+}
+/* ================= 棒球小游戏（第四章后：柚咲 vs 有宇） ================= */
+const bb={on:false,phase:'ready',t:0,power:0,dirn:1,bx:0,by:0,bvx:0,bvy:0,swung:false,swingT:0,
+  balls:0,strikes:0,outs:0,runs:0,inn:1,msg:'',msgT:0,pitchCd:0,ballSprite:null,result:''};
+function showBaseballIntro(){
+  say('school','hope',[
+    ['yusa','yusa','有宇前辈！学生会的大家说，输给友利学姐的人要接受「惩罚游戏」！'],
+    ['yuu','yuu','为什么是我……好吧，什么游戏？'],
+    ['yusa','yusa','棒球对决！我投球，你打击。三振出局可就要请喝果汁哦！'],
+    ['yuu','yuu','（柚咲的投球……据说「快得不像人类」。上吧。）'],
+  ],()=>startBaseball());
+}
+function startBaseball(){
+  bb.on=true;bb.phase='wait';bb.t=0;bb.power=0;bb.dirn=1;
+  bb.balls=0;bb.strikes=0;bb.outs=0;bb.runs=0;bb.inn=1;bb.swung=false;bb.pitchCd=1.2;bb.result='';
+  state='baseball';setMood('hope');
+  setTouchUI({show:true,atk:'挥',abi:'',sub:''});
+  document.getElementById('tbAbi').style.visibility='hidden';
+  document.getElementById('tbSub').style.visibility='hidden';
+  toast('惩罚游戏 · 棒球对决','看准时机按 J / 点击 挥棒！\n三振前尽可能得分');
+}
+function bbPitch(){
+  bb.phase='flying';bb.swung=false;
+  // 柚咲投球：带随机速度和些许纵向变化
+  const spd=340+R()*160+bb.inn*22;
+  bb.bx=W*.16;bb.by=H*.44;
+  bb.bvx=spd;bb.bvy=(H*.62-bb.by)/((W*.72)/spd)+(R()-.5)*40;
+  sfx('shoot');
+}
+function updateBaseball(dt,t){
+  bb.msgT-=dt;
+  if(bb.phase==='wait'){
+    bb.pitchCd-=dt;
+    if(bb.pitchCd<=0)bbPitch();
+    if(atkEdge()){bb.strikes++;bb.msg='挥空了！好球 '+bb.strikes;bb.msgT=1.4;sfx('no');
+      if(bb.strikes>=3)bbStrikeout();}
+  }else if(bb.phase==='charge'){
+    // 备用蓄力段（未使用）
+  }else if(bb.phase==='flying'){
+    bb.bx+=bb.bvx*dt;bb.by+=bb.bvy*dt;
+    if(!bb.swung&&atkEdge()){
+      bb.swung=true;
+      const good=bb.bx>W*.62&&bb.bx<W*.84;
+      if(good){
+        // 击中！按接近球心程度决定强度
+        const center=1-Math.abs(bb.bx-W*.73)/(W*.11);
+        bbPhaseHit(center);
+      }else{
+        bb.strikes++;sfx('swing');
+        if(bb.bx<W*.62){bb.msg='太早了！';}else{bb.msg='太晚了！';}
+        bb.msg+=' 好球 '+bb.strikes;bb.msgT=1.4;
+        if(bb.strikes>=3)bbStrikeout();
+        else{bb.phase='wait';bb.pitchCd=1;}
+      }
+    }
+    if(bb.bx>W+40){
+      bb.strikes++;bb.msg='好球！没挥棒 '+bb.strikes;bb.msgT=1.4;sfx('no');
+      if(bb.strikes>=3)bbStrikeout();
+      else{bb.phase='wait';bb.pitchCd=1;}
+    }
+  }else if(bb.phase==='hit'){
+    bb.bx+=bb.bvx*dt;bb.by+=bb.bvy*dt;bb.bvy+=560*dt;
+    if(bb.by>H*.8&&bb.bvy>0&&bb.result!=='HR'){
+      bb.by=H*.8;bb.bvy*=-.4;bb.bvx*=.7;
+    }
+    bb.t-=dt;
+    if(bb.t<=0||bb.bx>W+80){
+      bb.runs+=bb.pts;bb.msg=(bb.result==='HR'?'————全垒打！！————':(bb.result==='3B'?'三垒安打！':bb.result==='2B'?'二垒安打！':'一垒安打！'))+' 得分+'+bb.pts;
+      bb.msgT=1.8;sfx(bb.result==='HR'?'fanfare':'pickup');
+      bb.balls=0;bb.strikes=0;
+      bb.phase='wait';bb.pitchCd=1.1;
+    }
+  }
+  // 每得 5 分进入下一局（难度提升）
+  if(bb.runs>=bb.inn*5&&bb.inn<3){bb.inn++;bb.msg='第 '+bb.inn+' 局！柚咲的球越来越快了！';bb.msgT=2;}
+  // 挥空 3 次×已得 0 分 → 结束
+  if(bb.outs>=3||bb.strikes>=99){}
+}
+function bbPhaseHit(center){
+  bbPhaseHitImpl(center);
+}
+function bbPhaseHitImpl(center){
+  const pow=center;
+  bb.result=pow>.82?'HR':pow>.55?'3B':pow>.3?'2B':'1B';
+  bb.pts=bb.result==='HR'?3:bb.result==='3B'?2:1;
+  bb.phase='hit';bb.t=bb.result==='HR'?2.4:1.8;
+  const ang=-.5-pow*.5;
+  bb.bvx=Math.cos(ang)*(420+pow*420);bb.bvy=Math.sin(ang)*(420+pow*420);
+  sfx('hit');shake=.25;
+  burst(bb.bx,bb.by,'#ffd98a',12,200);
+  addFloat(bb.bx,bb.by-16,bb.result==='HR'?'HOME RUN!':bb.result,'#ffd98a');
+}
+function bbStrikeout(){
+  bb.outs++;bb.strikes=0;
+  bb.msg='三振！ out '+bb.outs;bb.msgT=1.6;sfx('catch');
+  if(bb.outs>=3){
+    bb.phase='done';
+    setTimeout(()=>{
+      bb.on=false;
+      seqDialog('postBB',()=>{save.bb=bb.runs;store();chapterSelect();});
+    },1400);
+  }else{bb.phase='wait';bb.pitchCd=1.2;}
+}
+function drawBaseball(ctx,t){
+  bgSchool(ctx,t,false);
+  // 内野
+  ctx.fillStyle='#5a8a4c';ctx.beginPath();ctx.ellipse(W/2,H*.78,320,80,0,0,7);ctx.fill();
+  ctx.fillStyle='#c8a870';ctx.beginPath();ctx.ellipse(W/2,H*.78,150,40,0,0,7);ctx.fill();
+  // 柚咲（投手丘）
+  drawSprite(ctx,'yusa',W*.13,H*.5,1,{});
+  // 击球手（有宇）
+  drawSprite(ctx,'yuu',W*.85,H*.5,-1,{});
+  if(PL&&PL.kind==='yuu')0;
+  // 好/坏球区提示
+  ctx.strokeStyle='rgba(255,255,255,.35)';ctx.setLineDash([6,6]);
+  ctx.strokeRect(W*.62,H*.3,W*.22,H*.5);
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='11px sans-serif';
+  ctx.fillText('挥棒区',W*.66,H*.28);
+  // 球
+  if(bb.phase==='flying'||bb.phase==='hit'){
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(bb.bx,bb.by,6,0,7);ctx.fill();
+    ctx.strokeStyle='#d84040';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.arc(bb.bx,bb.by,6,.6,2.4);ctx.stroke();
+    ctx.beginPath();ctx.arc(bb.bx,bb.by,6,3.7,5.5);ctx.stroke();
+  }
+  // 记分板
+  ctx.fillStyle='rgba(8,12,28,.8)';ctx.fillRect(W/2-140,16,280,58);
+  ctx.strokeStyle='#5a74c8';ctx.strokeRect(W/2-140,16,280,58);
+  ctx.fillStyle='#ffd98a';ctx.font='bold 15px sans-serif';
+  ctx.fillText('得分 '+bb.runs,W/2-120,40);
+  ctx.fillStyle='#cdd6f4';ctx.font='13px sans-serif';
+  ctx.fillText(bb.outs+' out · 第'+bb.inn+'局',W/2-30,40);
+  ctx.fillStyle='#ff8a8a';
+  ctx.fillText('●'.repeat(bb.strikes)+'○'.repeat(Math.max(0,3-bb.strikes)),W/2-30,58);
+  ctx.fillStyle='#8fa3d8';ctx.font='11px sans-serif';
+  ctx.fillText('西森柚咲 投',W/2+70,40);
+  // 提示
+  if(bb.phase==='wait'){
+    ctx.fillStyle='rgba(255,255,255,'+(.5+.3*Math.sin(t*4))+')';
+    ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillText('柚咲准备投球……看准了按【击】！',W/2,H*.24);
+    ctx.textAlign='left';
+  }
+  if(bb.msgT>0){
+    ctx.fillStyle='rgba(8,12,28,.75)';ctx.fillRect(W/2-160,H*.86,320,34);
+    ctx.fillStyle='#ffd98a';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillText(bb.msg,W/2,H*.86+22);ctx.textAlign='left';
+  }
+}
+/* ================= 菜单与流程 ================= */
+function showTitle(){
+  state='title';setMood('title');ovl.className='show';
+  ovl.innerHTML=
+   '<div class="panel">'+
+   '<h1>夏洛特</h1><h2>— Charlotte · 星之海的约定 —</h2>'+
+   '<p>思春期能力者同人 · 粉丝致敬之作</p>'+
+   '<div><span class="btn" data-act="start">从第一章开始</span>'+
+   '<span class="btn ghost" data-act="cont">继续游戏'+(save.u>1?'（第'+save.u+'章）':'')+'</span>'+
+   '<span class="btn ghost" data-act="chap">章节选择</span></div>'+
+   '<p class="note">键盘：A/D 移动 · W/空格 跳 · J 拍照/攻击 · K 能力 · L 冲刺/瞬移 · Esc 暂停<br>'+
+   '手机：左下虚拟摇杆 + 右侧按钮 · 点击推进对话</p>'+
+   '<p class="note">本作为同人二次创作，与原作 P.A.WORKS / 麻枝准 无关</p></div>';
+  bindMenu();
+}
+function chapterSelect(){
+  state='menu';setMood('calm');ovl.className='show';
+  let chips='';
+  LEVELS.forEach((L,i)=>{
+    const u=i+1;
+    const locked=u>save.u;
+    chips+='<span class="chip" data-chap="'+u+'" style="'+(locked?'opacity:.35;pointer-events:none':'')+'">'+
+      (locked?'🔒 ':'')+L.name+'</span><br>';
+  });
+  chips+='<span class="chip" data-chap="bb" style="'+(save.u<3?'opacity:.35;pointer-events:none':'')+'">⚾ 惩罚游戏·棒球对决</span>';
+  ovl.innerHTML='<div class="panel"><h2>章节选择</h2><p style="margin:10px 0">'+chips+'</p>'+
+    '<span class="btn ghost" data-act="title">返回标题</span></div>';
+  bindMenu();
+}
+function showResult(win){
+  state='result';setMood(win?'hope':'sad');ovl.className='show';
+  ovl.innerHTML='<div class="panel"><h2>'+(win?'章节完成':'挑战失败')+'</h2>'+
+   '<p>'+(win?'第'+LV.id+'章 · '+LV.name+' 完成！':'不要紧，再试一次吧。故事还在等着你。')+'</p>'+
+   '<div><span class="btn" data-act="retry">重新挑战</span>'+
+   '<span class="btn ghost" data-act="chap">章节选择</span>'+
+   '<span class="btn ghost" data-act="title">返回标题</span></div></div>';
+  bindMenu();
+}
+function showEnding(){
+  state='ending';setMood('hope');
+  say('stars','hope',STORY.post6,()=>{
+    save.clear=true;store();
+    ovl.className='show';
+    ovl.innerHTML='<div class="panel"><h1 style="font-size:min(9vw,34px)">— 完 —</h1>'+
+      '<p>感谢游玩《夏洛特 · 星之海的约定》同人游戏！</p>'+
+      '<p class="note">"即使能力消失，我们一起走过的日子也不会消失。"</p>'+
+      '<div><span class="btn" data-act="title">返回标题</span>'+
+      '<span class="btn ghost" data-act="chap">章节选择</span></div>'+
+      '<p class="note">同人作品 · 致敬 Charlotte（2015）</p></div>';
+    bindMenu();
+  });
+}
+function startChapter(u){
+  pokeAudio();
+  const idx=u-1;
+  const L=LEVELS[idx];
+  const preKey={1:'pre1',2:'pre2',3:'pre3',4:'pre4',5:'pre5',6:'pre6'}[u];
+  const playPre=(k)=>{
+    if(!k){loadLevel(idx,true);toast(L.name,L.brief);return;}
+    say('schoolN',L.bgm==='battle'?'tense':'calm',STORY[k],()=>playPre(null));
+  };
+  playPre(STORY[preKey]?preKey:null);
+}
+function bindMenu(){
+  ovl.querySelectorAll('[data-act]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      pokeAudio();sfx('ok');
+      const a=el.dataset.act;
+      if(a==='title')showTitle();
+      else if(a==='start'){save.u=1;store();startChapter(1);}
+      else if(a==='cont')startChapter(Math.min(save.u,LEVELS.length));
+      else if(a==='chap')chapterSelect();
+      else if(a==='retry')startChapter(LV.id);
+      else if(a==='resume')togglePause();
+    });
+  });
+  ovl.querySelectorAll('[data-chap]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      pokeAudio();sfx('ok');
+      const c=el.dataset.chap;
+      if(c==='bb')startBaseball();
+      else startChapter(parseInt(c,10));
+    });
+  });
+}
+function togglePause(){
+  if(state!=='play'&&!paused)return;
+  paused=!paused;
+  if(paused){
+    ovl.className='show';
+    ovl.innerHTML='<div class="panel"><h2>暂停</h2>'+
+      '<div><span class="btn" data-act="resume">继续</span>'+
+      '<span class="btn ghost" data-act="chap">退出章节</span>'+
+      '<span class="btn ghost" data-act="title">返回标题</span></div></div>';
+    bindMenu();
+  }else{ovl.className='';ovl.innerHTML='';}
+}
+addEventListener('keydown',e=>{
+  if(e.code==='Escape'&&state==='play')togglePause();
+});
+/* ================= 主循环 ================= */
+let last=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  const t=ts/1000;tGlobal=t;
+  const dt=Math.min(.033,(ts-last)/1000||.016);last=ts;
+  if(paused)return;
+  musicTick();
+  if(shake>0)shake-=dt*1.6;
+  if(state==='dialog')updateDlg(dt);
+  else if(state==='play'){
+    if(freezeT>0){
+      freezeT-=dt;
+      if(freezeT<=0)afterWin();
+    }else{
+      if(introT>0)introT-=dt;
+      updatePlayer(dt);
+      for(const e of ents)updateEnemy(e,dt);
+      updateShots(dt);
+      cam=clamp(lerp(cam,PL.x-W/2+PL.face*40,1-Math.pow(.001,dt)),0,Math.max(0,LV.cw-W));
+      camY=clamp(lerp(camY,PL.y-H/2-30,1-Math.pow(.01,dt)),0,Math.max(0,LV.ch-H));
+      for(const p of parts){p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=300*dt;}
+      parts=parts.filter(p=>p.t>0);
+      for(const f of floats)f.t-=dt*.9;
+      floats=floats.filter(f=>f.t>0);
+    }
+  }else if(state==='baseball'){
+    updateBaseball(dt,t);
+  }
+  g.clearRect(0,0,W,H);
+  if(state==='dialog')drawDlg(g,t);
+  else if(state==='play')drawPlay(g,t);
+  else if(state==='baseball')drawBaseball(g,t);
+  else drawMenuBg(g,t);
+  if(state==='dialog'){
+    g.fillStyle='rgba(255,255,255,'+(.35+.25*Math.sin(t*5))+')';
+    g.font='12px sans-serif';g.textAlign='center';
+    g.fillText('▼ 点击 / J 键继续',W/2,36);g.textAlign='left';
+  }
+  for(const k in press)press[k]=false;
+  tapEdge=false;
+}
+function drawMenuBg(ctx,t){
+  bgStars(ctx,t,0);
+  const cx=W*.5,cy=H*.3;
+  ctx.save();
+  ctx.globalAlpha=.9;
+  ctx.strokeStyle='rgba(160,200,255,.7)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx-120,cy-40);ctx.lineTo(cx+40,cy+14);ctx.stroke();
+  ctx.fillStyle='#eaf4ff';ctx.beginPath();ctx.arc(cx+44,cy+16,7,0,7);ctx.fill();
+  ctx.globalAlpha=.35;ctx.beginPath();ctx.arc(cx+44,cy+16,12,0,7);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='rgba(160,190,255,.14)';
+  ctx.beginPath();ctx.ellipse(W/2,H+60,340,120,0,0,7);ctx.fill();
+}
+// 启动
+setTouchUI({show:false});
+showTitle();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
