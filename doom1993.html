@@ -568,7 +568,7 @@ let TEX=null, SPR=null, FACES=null, THEME=null;
 let state='title';
 let diff=1;
 const DIFF=[{dm:0.6,cd:1.35,sp:0.85},{dm:1,cd:1,sp:1},{dm:1.5,cd:0.72,sp:1.12}];
-let lvlIdx=0, grid=[], GW=0, GH=0, doors=new Map(), things=[], projs=[], fxs=[];
+let lvlIdx=0, grid=[], GW=0, GH=0, doors=new Map(), things=[], projs=[], fxs=[], boomQ=[];
 let P=null, keys={}, totalKills=0, kills=0, totalItems=0, itemsGot=0, lvlTime=0, totalTime=0;
 let mapOn=false, mouseFire=false, useEdge=false, cheatBuf='', cheatGod=false;
 let bobT=0, flashDmg=0, flashPick=0, lightBoost=0, faceDir=0, faceT=0, faceMood='n', faceMoodT=0;
@@ -591,7 +591,7 @@ function loadLevel(n){
   const rows=L.map.slice();
   GH=rows.length; GW=0;
   for(const r of rows) GW=Math.max(GW,r.length);
-  doors.clear(); things=[]; projs=[]; fxs=[];
+  doors.clear(); things=[]; projs=[]; fxs=[]; boomQ=[];
   totalKills=0; kills=0; totalItems=0; itemsGot=0; lvlTime=0;
   let sx=1.5, sy=1.5;
   for(let y=0;y<GH;y++){
@@ -716,7 +716,7 @@ function fireHitscan(spread,range,dmg){
     if(perp<t.r+0.22+along*0.05&&along<bestD){ best=t; bestD=along; }
   }
   if(best){
-    if(best.kind==='enemy'){ damageEnemy(best,dmg); addFx('blood',P.x+dx*(bestD-0.2),P.y+dy*(bestD-0.2),0.45,false); }
+    if(best.kind==='enemy'){ damageEnemy(best,dmg); sfx('flesh'); addFx('blood',P.x+dx*(bestD-0.2),P.y+dy*(bestD-0.2),0.45,false); }
     else { best.hp-=dmg; best.flash=0.1; addFx('puff',P.x+dx*(bestD-0.2),P.y+dy*(bestD-0.2),0.4,false);
       if(best.hp<=0) explodeBarrel(best); else sfx('hitwall'); }
   } else if(wallD<range){
@@ -757,7 +757,7 @@ function explodeBarrel(b){
       const dm=(70*(1-d/2.9))|0;
       if(isP) damagePlayer(dm);
       else if(t.kind==='enemy') damageEnemy(t,dm);
-      else if(t.kind==='barrel'&&t.alive) setTimeout(()=>explodeBarrel(t),120+rnd()*120);
+      else if(t.kind==='barrel'&&t.alive) boomQ.push({b:t,t:0.12+rnd()*0.12});
     } };
   hurt(P,true);
   for(const t of things) if(t.kind==='enemy'||t.kind==='barrel') hurt(t,false);
@@ -1120,7 +1120,13 @@ function update(dt){
     const dur=f.type==='explo'?0.42:(f.type==='blood'?0.3:0.26);
     if(f.t>dur) fxs.splice(i,1);
   }
+  // 油桶连锁爆炸队列
+  for(let i=boomQ.length-1;i>=0;i--){
+    boomQ[i].t-=dt;
+    if(boomQ[i].t<=0){ const b=boomQ[i].b; boomQ.splice(i,1); if(b.alive) explodeBarrel(b); }
+  }
   for(const t of things) if(t.kind==='barrel'&&!t.alive&&t.boom){ t.boomT+=dt; if(t.boomT>0.45) t.boom=false; }
+  if(melt) melt.t+=dt;
   schedMusic();
 }
 
@@ -1405,6 +1411,15 @@ function renderMap(){
   drawTiny(FB,6,VIEWH-9,'TAB MAP',rgb(200,200,140),1);
 }
 
+// ---------- 经典"熔化"屏幕转场 ----------
+let melt=null;
+function startMelt(){
+  try{
+    melt={buf:FB.slice(0),t:0,delays:new Float32Array(W)};
+    for(let x=0;x<W;x++) melt.delays[x]=rnd()*0.4;
+  }catch(e){ melt=null; }
+}
+
 // ---------- 渲染主入口 ----------
 function render(){
   if(state==='title') renderTitle();
@@ -1441,6 +1456,19 @@ function render(){
       for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const c=FB[y*W+x];
         FB[y*W+x]=rgb((c&255)*0.4|0,((c>>8)&255)*0.4|0,((c>>16)&255)*0.4|0); }
     }
+  }
+  // 熔化转场：旧画面逐列加速下坠，露出新画面
+  if(melt){
+    let done=true;
+    for(let x=0;x<W;x++){
+      const lt=melt.t-melt.delays[x];
+      const off=lt<=0?0:lt*lt*H*3.2;
+      if(off>=H) continue;
+      done=false;
+      const o=off|0;
+      for(let y=o;y<H;y++) FB[y*W+x]=melt.buf[(y-o)*W+x];
+    }
+    if(done) melt=null;
   }
   ctx.putImageData(img,0,0);
 }
@@ -1495,6 +1523,7 @@ function showTitle(){
   ovlBox.innerHTML=`
     <div style="height:96px"></div>
     <h2 style="color:#ffb050">毁灭战士 1993 · 致敬版</h2>
+    ${bestTime?`<p style="color:#ffd040;font-size:13px;margin:0">🏆 最佳通关纪录：${fmtT(bestTime)}</p>`:''}
     <p>选择难度</p>
     <div>
       <button class="btn small ${diff===0?'sel':''}" id="d0">不太疼</button>
@@ -1528,6 +1557,7 @@ function showHelp(){
 }
 function startGame(){
   initAudio(); AC&&AC.resume&&AC.resume();
+  if(P) startMelt();   // 重开新局时熔化旧画面
   P=null; totalTime=0; musStep=0; musNext=AC?AC.currentTime:0;
   wCur=1;
   loadLevel(0);
@@ -1540,16 +1570,22 @@ function startGame(){
   ovlBox.onclick=()=>{ ovlBox.onclick=null; ovl.classList.add('hide'); state='play'; if(AC) musNext=AC.currentTime; };
 }
 function fmtT(s){ return floor(s/60)+':'+String(floor(s%60)).padStart(2,'0'); }
+// 通关最佳纪录（localStorage 持久化）
+let bestTime=0;
+try{ bestTime=+localStorage.getItem('doom1993_best')||0; }catch(e){}
+function saveBest(){ try{ localStorage.setItem('doom1993_best',String(Math.round(bestTime))); }catch(e){} }
 function showInter(){
   document.exitPointerLock&&document.exitPointerLock();
   mouseFire=false;
   ovl.classList.remove('hide');
   if(lvlIdx>=LEVELS.length-1){
     state='win';
+    let rec=false;
+    if(!bestTime||totalTime<bestTime){ bestTime=totalTime; saveBest(); rec=true; }
     ovlBox.innerHTML=`
       <h1>胜 利 !</h1>
       <p>你杀穿了地狱，关闭了传送门。<br>……但地狱永不止息。</p>
-      <p>总用时 <span class="stat">${fmtT(totalTime)}</span></p>
+      <p>总用时 <span class="stat">${fmtT(totalTime)}</span>${rec?' <span style="color:#ffd040">🏆 新纪录!</span>':''}${(!rec&&bestTime)?` · 最佳 <span class="stat">${fmtT(bestTime)}</span>`:''}</p>
       <button class="btn" id="bAgain">再来一局</button>
       <button class="btn" id="bMenu">主菜单</button>`;
     document.getElementById('bAgain').onclick=()=>{ totalTime=0; startGame(); };
@@ -1563,6 +1599,7 @@ function showInter(){
          用时 <span class="stat">${fmtT(lvlTime)}</span></p>
       <button class="btn" id="bNext">下一关</button>`;
     document.getElementById('bNext').onclick=()=>{
+      startMelt();   // 经典转场：上一关画面熔化坠落到新关卡
       const keep={armor:P.armor,weapons:P.weapons,ammo:{...P.ammo}};
       loadLevel(lvlIdx+1);
       P.armor=keep.armor; P.weapons=keep.weapons; P.ammo=keep.ammo;
@@ -1578,6 +1615,7 @@ function showInter(){
   }
 }
 function restoreSnap(){
+  startMelt();
   const s=JSON.parse(P.snap);
   loadLevel(lvlIdx);
   P.hp=s.hp; P.armor=s.armor; P.weapons=s.w; P.ammo=s.a;
@@ -1665,6 +1703,9 @@ document.addEventListener('mousedown',()=>{ initAudio(); AC&&AC.resume&&AC.resum
 document.addEventListener('contextmenu',e=>e.preventDefault());
 // 调试钩子（不影响游戏）
 window.__dbg=()=>({state,lv:lvlIdx,x:P&&P.x,y:P&&P.y,hp:P&&P.hp,ammo:P&&P.ammo,weapons:P&&P.weapons,kills,dead:P&&P.dead});
+window.__melt=startMelt;
+// 切到后台自动暂停
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&state==='play') pauseGame(); });
 </script>
 </body>
 </html>
