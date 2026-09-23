@@ -24,6 +24,32 @@
   #pun{font-size:9.5px;color:#c79a63;letter-spacing:.6px;margin-top:1px;opacity:.9}
   #pun b{color:#ffcb76}
   #record{font-size:11px;color:#c9ab84;margin-top:2px;letter-spacing:.3px}
+  #room{display:flex;align-items:center;justify-content:center;gap:7px;font-size:10.5px;color:#ffcf7a;margin-top:3px}
+  #room.hide{display:none}
+  #room span{max-width:78vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #btnLeave,#btnRe{font-size:10px;padding:1px 7px;border-radius:8px;font-family:inherit;color:#ffd9a8;cursor:pointer;
+    background:rgba(0,0,0,.3);border:1px solid rgba(255,205,140,.35)}
+  #btnRe.hide,#btnLeave.hide{display:none}
+  #btnRe.hide,#btnLeave.hide{display:none}
+  #netbar{display:flex;gap:7px}
+  #netbar.hide{display:none}
+  #netbar input{flex:1;min-width:0;padding:10px 11px;border-radius:13px;font-family:inherit;font-size:13px;
+    color:#ffeacb;background:rgba(0,0,0,.32);border:1.5px solid rgba(255,206,140,.28)}
+  #netbar button{flex:0 0 62px;padding:10px 0;border-radius:13px;font-size:13.5px;font-weight:700;font-family:inherit;
+    color:#3a2208;background:linear-gradient(180deg,#ffd79a,#efb057);border:none;box-shadow:0 3px 0 #a9702c}
+  #prompt{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:13px;font-size:12.5px;color:#ffe6c4;
+    background:rgba(120,72,26,.55);border:1px solid rgba(255,205,140,.4)}
+  #prompt.hide{display:none}
+  #prompt span{flex:1;min-width:0}
+  #prompt button{padding:7px 13px;border-radius:11px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;
+    color:#3a2208;background:linear-gradient(180deg,#ffd79a,#efb057);border:none}
+  #prompt button#promptNo{background:linear-gradient(180deg,#6b4526,#3a2513);color:#ffe6c4}
+  .ob{margin-top:10px;padding:10px;border-radius:14px;background:rgba(0,0,0,.26);border:1px dashed rgba(255,205,140,.3)}
+  .ob input{width:100%;margin-bottom:8px;padding:11px;border-radius:12px;font-family:inherit;font-size:14px;
+    color:#ffeacb;background:rgba(0,0,0,.32);border:1.5px solid rgba(255,206,140,.28)}
+  .linkbox{margin:10px 0;padding:10px;border-radius:12px;font-size:11.5px;line-height:1.5;word-break:break-all;
+    background:rgba(0,0,0,.35);border:1px solid rgba(255,205,140,.35);color:#ffe0ac;
+    -webkit-user-select:text;user-select:text}
   #record b{color:#ffd07a}
   #cards{display:flex;gap:8px}
   .card{flex:1;display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:15px;min-width:0;
@@ -66,6 +92,7 @@
   #cast{font-size:10.5px;color:#a9927a;line-height:1.35;min-height:14px;padding:0 2px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #cast b{color:#ffcb76;font-weight:600}
+  #cast.hide{display:none}
   #boardWrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
   #board{touch-action:none;display:block;border-radius:16px;
     box-shadow:0 12px 28px rgba(0,0,0,.55),0 0 0 3px rgba(255,214,160,.16)}
@@ -134,6 +161,7 @@
   <header id="hd">
     <h1>泥巴菜鸡<span class="vs">⚔</span>糖包</h1>
     <div id="pun">泥巴菜鸡 ＝ 宁 波 财 经（谐音梗 · 懂的都懂）</div>
+    <div id="room" class="hide"><span id="roomTxt"></span><button id="btnRe" class="hide">重连</button><button id="btnLeave">退出</button></div>
     <div id="record">糖包 <b>0</b> 胜 · 菜鸡 <b>0</b> 胜</div>
   </header>
   <div id="cards">
@@ -192,8 +220,242 @@
     <button id="btnSwap">换先手</button>
     <button id="btnSound" title="音效">🔊</button>
   </div>
+  <div id="netbar" class="hide">
+    <input id="chatIn" type="text" maxlength="36" placeholder="和群友吐槽两句…（发弹幕）">
+    <button id="chatSend">发送</button>
+  </div>
+  <div id="prompt" class="hide"><span id="promptTxt"></span><button id="promptYes">同意</button><button id="promptNo">拒绝</button></div>
   <div id="ovl"><div id="panel"></div></div>
 </div>
+
+<script id="net">
+/* ==========================================================================
+   联机通道 —— 泥巴菜鸡战糖包（零依赖、零后端）
+   借公共消息通道把两台手机连到一起：QQ 群点链接 → 同一房间号 → 即可对局。
+
+   通道优先级（两边按同一顺序探测，所以正常情况下会落在同一条通道上）：
+     0) MQTT broker-cn.emqx.io:8084   ← 国内节点，优先
+     1) MQTT broker.emqx.io:8084
+     2) ntfy.sh（HTTPS 443：POST 发 / SSE 收 / 带历史）
+     3) MQTT broker.hivemq.com:8884
+     4) MQTT test.mosquitto.org:8081
+   注意：不同 broker 之间并不互通，所以"两边必须落在同一条通道"。
+   为此做了两层保险：
+     a) 顺序探测（同一个优先级顺序，网络环境相近就会一致）
+     b) 消息里带通道号，房主把通道号广播出去，客人不通就 adopt() 切过去
+   消息按 id 去重，因此切换/重连不会重复投递；QoS0 丢包由上层 state 重发兜底。
+   本文件不碰 DOM，可单独在 node 里跑（node 22+ 自带 WebSocket/fetch）。
+   ========================================================================== */
+(function (global) {
+  'use strict';
+
+  var PREFIX = 'mudchess/v1/';
+  var NTFY = 'https://ntfy.sh/';
+  var CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  var CHANNELS = [
+    { name: 'MQTT', detail: 'broker-cn.emqx.io', url: 'wss://broker-cn.emqx.io:8084/mqtt' },
+    { name: 'MQTT', detail: 'broker.emqx.io', url: 'wss://broker.emqx.io:8084/mqtt' },
+    { name: 'ntfy', detail: 'ntfy.sh', url: NTFY },
+    { name: 'MQTT', detail: 'broker.hivemq.com', url: 'wss://broker.hivemq.com:8884/mqtt' },
+    { name: 'MQTT', detail: 'test.mosquitto.org', url: 'wss://test.mosquitto.org:8081/mqtt' }
+  ];
+
+  function rid(n) { var s = ''; for (var i = 0; i < n; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return s; }
+  function roomCode() { return rid(4); }
+  function nowMs() { return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now(); }
+
+  /* ---------- MQTT 3.1.1 最小客户端 ---------- */
+  function encLen(len) { var out = [], b; do { b = len % 128; len = Math.floor(len / 128); if (len > 0) b |= 128; out.push(b); } while (len > 0); return out; }
+  function utf8(s) {
+    var out = [];
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function mqttStr(s) { var b = utf8(s); return [(b.length >> 8) & 255, b.length & 255].concat(b); }
+  function packet(type, flags, body) { return new Uint8Array([(type << 4) | flags].concat(encLen(body.length), body)); }
+  function connectPacket(cid, keep) { return packet(1, 0, [0, 4, 77, 81, 84, 84, 4, 2, (keep >> 8) & 255, keep & 255].concat(mqttStr(cid))); }
+  function subscribePacket(pid, topic) { return packet(8, 2, [(pid >> 8) & 255, pid & 255].concat(mqttStr(topic), [0])); }
+  function publishPacket(topic, text, retain) { return packet(3, retain ? 1 : 0, mqttStr(topic).concat(utf8(text))); }
+  function parsePacket(buf) {
+    var b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    var type = b[0] >> 4, i = 1, mult = 1, len = 0, d;
+    do { d = b[i++]; len += (d & 127) * mult; mult *= 128; } while ((d & 128) && i < b.length);
+    var pl = b.subarray(i, i + len);
+    if (type === 3) {
+      var tl = (pl[0] << 8) | pl[1], k, topic = '', text = '', body = pl.subarray(2 + tl);
+      for (k = 0; k < tl; k++) topic += String.fromCharCode(pl[2 + k]);
+      if (typeof TextDecoder !== 'undefined') text = new TextDecoder().decode(body);
+      else for (k = 0; k < body.length; k++) text += String.fromCharCode(body[k]);
+      return { type: 'publish', topic: topic, text: text };
+    }
+    return { type: type };
+  }
+
+  function mqttTransport(chan, topic, cbs) {
+    var retainLast = false;
+    var ws = null, closed = false, ping = null, keep = 25, joined = false;
+    var cid = 'mud_' + rid(10);
+    try { ws = new WebSocket(chan.url, 'mqtt'); ws.binaryType = 'arraybuffer'; }
+    catch (e) { setTimeout(cbs.fail, 0); return null; }
+    ws.onopen = function () { try { ws.send(connectPacket(cid, keep)); } catch (e) { cbs.fail(); } };
+    ws.onmessage = function (ev) {
+      var p = parsePacket(ev.data);
+      if (p.type === 2) {
+        try { ws.send(subscribePacket(1, topic)); } catch (e) { }
+        joined = true;
+        ping = setInterval(function () { try { ws.send(new Uint8Array([0xc0, 0])); } catch (e) { } }, keep * 1000);
+        cbs.ready();
+      } else if (p.type === 'publish') cbs.msg(p.text);
+    };
+    ws.onerror = function () { if (joined) { if (!closed) cbs.down(); } else cbs.fail(); };
+    ws.onclose = function () { if (closed) return; if (joined) { joined = false; cbs.down(); } else cbs.fail(); };
+    return {
+      key: chan.name + ':' + chan.detail,
+      send: function (text, retain) { if (!ws || ws.readyState !== 1 || !joined) return false; try { ws.send(publishPacket(topic, text, retain)); return true; } catch (e) { return false; } },
+      close: function () { closed = true; if (ping) clearInterval(ping); try { ws.close(); } catch (e) { } }
+    };
+  }
+
+  function ntfyTransport(chan, topicName, cbs, since) {
+    var closed = false, es = null, url = NTFY + topicName;
+    try {
+      if (typeof fetch !== 'undefined') {
+        fetch(url + '/json?poll=1&since=' + (since || '10m')).then(function (r) { return r.text(); }).then(function (t) {
+          t.split('\n').forEach(function (line) {
+            if (!line.trim()) return;
+            try { var o = JSON.parse(line); if (o && o.message) cbs.msg(o.message); } catch (e) { }
+          });
+        }).catch(function () { });
+      } else { setTimeout(cbs.fail, 0); return null; }
+      es = new global.EventSource(url + '/sse');
+      es.onopen = function () { cbs.ready(); };
+      es.onmessage = function (ev) { try { var o = JSON.parse(ev.data); if (o && o.message) cbs.msg(o.message); } catch (e) { } };
+      es.onerror = function () { if (!closed && es && es.readyState === 2) cbs.down(); };
+    } catch (e) { setTimeout(cbs.fail, 0); return null; }
+    return {
+      key: chan.detail,
+      send: function (text, retain) {
+        if (closed) return false;
+        try { fetch(url, { method: 'POST', body: text, headers: { 'X-Priority': 'min', 'X-Cache': 'yes', 'X-Cache-For': '604800' } }).catch(function () { }); }
+        catch (e) { return false; }
+        return true;
+      },
+      close: function () { closed = true; try { es.close(); } catch (e) { } }
+    };
+  }
+
+  /* ---------- 一房间一条连接 ---------- */
+  function connect(opts) {
+    var room = String(opts.room || roomCode()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || roomCode();
+    var mqttTopic = PREFIX + room, ntfyTopic = 'mudchess-v1-' + room;
+    var senderId = rid(8), seq = 0, closed = false, ready = false, everReady = false;
+    var tr = null, queue = [], seen = [], seenSet = new Set();
+    var chanIdx = -1, retry = 0, attemptTimer = null, watchdog = null, reconnTimer = null;
+    var tried = {}, t0 = nowMs();
+
+    function st(state, detail) {
+      try { if (opts.onStatus) opts.onStatus(state, detail || '', { room: room, chan: chanIdx, transport: chanIdx >= 0 ? CHANNELS[chanIdx].name : '-', detail: chanIdx >= 0 ? CHANNELS[chanIdx].detail : '', queue: queue.length }); } catch (e) { }
+    }
+    function clearTimers() { clearTimeout(attemptTimer); clearTimeout(watchdog); clearTimeout(reconnTimer); }
+
+    function handle(text) {
+      var m;
+      try { m = JSON.parse(text); } catch (e) { return; }
+      if (!m || !m.id || m.from === senderId) return;
+      if (seenSet.has(m.id)) return;
+      seenSet.add(m.id); seen.push(m.id);
+      if (seen.length > 500) seenSet.delete(seen.shift());
+      if (!m.to || m.to === senderId) { try { if (opts.onMsg) opts.onMsg(m); } catch (e) { } }
+    }
+    function attach(t, idx) {
+      if (closed) { t.close(); return; }
+      clearTimers();
+      if (tr && tr !== t) { try { tr.close(); } catch (e) { } }
+      tr = t; chanIdx = idx; ready = true; retry = 0;
+      st('connected');
+      while (queue.length) { var q0 = queue.shift(); if (!tr.send(q0[0], q0[1])) break; }
+      try { if (opts.onReady) opts.onReady({ chan: idx, transport: CHANNELS[idx].name, detail: CHANNELS[idx].detail, reconnected: everReady }); } catch (e) { }
+      everReady = true;
+    }
+    function tryChan(idx) {
+      if (closed || ready) return;
+      if (idx >= CHANNELS.length) { st('failed', '所有通道都连不上，可点重试'); return; }
+      var chan = CHANNELS[idx];
+      chanIdx = idx;
+      st('connecting', '通道 ' + (idx + 1) + '/' + CHANNELS.length + ' · ' + chan.name + ' ' + chan.detail);
+      var holder = { t: null, settled: false };
+      var cbs = {
+        ready: function () { if (!holder.settled && !closed) { holder.settled = true; clearTimeout(attemptTimer); attach(holder.t, idx); } },
+        msg: handle,
+        fail: function () { if (!holder.settled && !closed && !ready) { holder.settled = true; clearTimeout(attemptTimer); tryChan(idx + 1); } },
+        down: function () { if (!closed && ready) onDown(); }
+      };
+      holder.t = chan.name === 'ntfy' ? ntfyTransport(chan, ntfyTopic, cbs, opts.since) : mqttTransport(chan, mqttTopic, cbs);
+      if (!holder.t) return;
+      clearTimeout(attemptTimer);
+      attemptTimer = setTimeout(function () {
+        if (!holder.settled && !closed && !ready) { holder.settled = true; try { holder.t.close(); } catch (e) { } tryChan(idx + 1); }
+      }, 3600);
+    }
+    function onDown() {
+      if (closed) return;
+      ready = false; retry++;
+      if (retry > 6) { st('failed', '连接反复中断，可点重试'); return; }
+      st('reconnecting', '连接中断，重连 ' + retry + '/6 …');
+      if (tr) { try { tr.close(); } catch (e) { } tr = null; }
+      clearTimeout(reconnTimer);
+      reconnTimer = setTimeout(function () {
+        if (closed) return;
+        if (chanIdx >= 0) tryChan(chanIdx);            // 先回到原通道（同房间要同通道）
+        watchdog = setTimeout(function () { if (!ready && !closed) tryChan(0); }, 4500);
+      }, 900 + retry * 500);
+    }
+    function send(obj, retain) {
+      obj.from = senderId;
+      obj.id = senderId + ':' + (++seq);
+      obj.ch = chanIdx;
+      var text = JSON.stringify(obj);
+      if (ready && tr && tr.send(text, retain)) return true;
+      if (queue.length < 100) queue.push([text, retain]);
+      return false;
+    }
+
+    st('connecting', '准备连接…');
+    tryChan(0);
+
+    return {
+      room: room, id: senderId, send: send,
+      chan: function () { return chanIdx; },
+      /* 切到指定通道（客人跟随房主的通道） */
+      adopt: function (idx) {
+        if (closed || idx < 0 || idx >= CHANNELS.length || idx === chanIdx) return;
+        ready = false; retry = 0;
+        if (tr) { try { tr.close(); } catch (e) { } tr = null; }
+        clearTimers();
+        tryChan(idx);
+      },
+      retryNow: function () { if (!ready && !closed) { retry = 0; tried = {}; tryChan(0); } },
+      state: function () {
+        return { room: room, ready: ready, chan: chanIdx, transport: chanIdx >= 0 ? CHANNELS[chanIdx].name : '-', detail: chanIdx >= 0 ? CHANNELS[chanIdx].detail : '', queue: queue.length, elapsed: Math.round(nowMs() - t0) };
+      },
+      close: function () {
+        if (closed) return;
+        try { send({ t: 'bye' }); } catch (e) { }
+        closed = true; clearTimers();
+        if (tr) { try { tr.close(); } catch (e) { } }
+      }
+    };
+  }
+
+  global.GomokuNet = { connect: connect, roomCode: roomCode, CHANNELS: CHANNELS, PREFIX: PREFIX };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
 
 <script id="engine">
 /* ==========================================================================
@@ -872,7 +1134,7 @@
 
   /* ---------- 战绩存档 ---------- */
   function loadRecord() {
-    var d = { sugar: 0, chick: 0, draw: 0, blunders: 0, games: 0 };
+    var d = { sugar: 0, chick: 0, draw: 0, blunders: 0, games: 0, onlineW: 0, onlineL: 0, fastWin: 0 };
     try {
       var s = JSON.parse(localStorage.getItem('mudGomokuRecord') || 'null');
       if (s && typeof s.sugar === 'number') d = s;
@@ -883,6 +1145,7 @@
   function showRecord() {
     var t = '糖包 <b>' + record.sugar + '</b> 胜 · 菜鸡 <b>' + record.chick + '</b> 胜';
     if (record.draw) t += ' · 平 <b>' + record.draw + '</b>';
+    if (record.onlineW || record.onlineL) t += ' · 联机 <b>' + (record.onlineW || 0) + '胜' + (record.onlineL || 0) + '负</b>';
     if (record.blunders) t += ' · 生涯失误 <b>' + record.blunders + '</b>';
     $('record').innerHTML = t;
   }
@@ -1117,7 +1380,7 @@
       sugar: {
         moves: 0, ms: 0, nodes: 0, maxDepth: 0, five: 0, four: 0, openFour: 0, three: 0,
         blockFour: 0, blockThree: 0, quiet: 0, verdictPly: 0, verdictCell: -1,
-        topCell: -1, topScore: -1, topPly: 0
+        blunder: 0, inacc: 0, best: 0, missWin: 0, topCell: -1, topScore: -1, topPly: 0
       },
       mistakes: [], stains: []
     };
@@ -1156,8 +1419,12 @@
     if (j.loss > 4000) return '缓手';
     return '闲手';
   }
-  function recordMove(who, cell, j, ply) {
-    var st = stats[who], tag = tagOf(j);
+  /* 统计口径：单机时"泥巴=人 / 糖包=AI"；联机时"泥巴=座位1 / 糖包=座位2" */
+  function keyOf(p) { return online.on ? (p === 1 ? 'mud' : 'sugar') : (p === aiP ? 'sugar' : 'mud'); }
+  function avatarOf(p) { return p === 1 ? 'mud' : 'sugar'; }
+  function whoName(p) { return online.on ? seatName(p) : (p === aiP ? '糖包' : '菜鸡'); }
+  function recordMove(p, cell, j, ply) {
+    var who = keyOf(p), st = stats[who], tag = tagOf(j);
     st.moves++;
     if (j.kind === 'five') st.five++;
     else if (j.kind === 'openFour') st.openFour++;
@@ -1167,23 +1434,23 @@
     else if (j.kind === 'blockThree') st.blockThree++;
     else st.quiet++;
     if (j.played > st.topScore) { st.topScore = j.played; st.topCell = cell; st.topPly = ply; }
-    if (who !== 'mud') return;
+    if (!online.on && p === aiP) return;                       // 单机时只记人的失误
     var bad = j.missedWin || j.missedBlock || j.loss > 45000;
     if (bad) {
       st.blunder++;
       stats.mistakes.push({
-        ply: ply, cell: cell, tag: tagOf(j), loss: Math.round(j.loss),
+        ply: ply, cell: cell, tag: tagOf(j), loss: Math.round(j.loss), side: who,
         suggest: j.missedWin && j.winCells.length ? j.winCells[0] : j.bestMove
       });
-      stats.stains.push({ cell: cell, kind: 'mud' });
-      reaction('mud', 'panic');
-      castLine('这一手 <b>' + nm(cell) + '</b> —— ' + tag + '，教务处看了都摇头。');
+      stats.stains.push({ cell: cell, kind: avatarOf(p) });
+      reaction(avatarOf(p), 'panic');
+      castLine(whoName(p) + ' 这一手 <b>' + nm(cell) + '</b> —— ' + tag + '，教务处看了都摇头。');
     } else if (j.loss > 15000) {
       st.inacc++;
-      castLine('菜鸡这手略亏，糖包白赚一步。');
+      castLine(whoName(p) + ' 这手略亏，白送对方一步。');
     } else if (j.played >= j.best - 1) {
       st.best++;
-      castLine('正着！这步跟引擎想的一样，解说鼓掌。');
+      castLine('正着！' + whoName(p) + ' 这步跟引擎想的一样，解说鼓掌。');
     }
   }
   function updateMeters() {
@@ -1214,6 +1481,7 @@
   function sec(title, body) { return '<div class="sec"><h3>' + title + '</h3>' + body + '</div>'; }
   function row3(k, a, b) { return '<tr><td class="k">' + k + '</td><td class="m">' + a + '</td><td class="s">' + b + '</td></tr>'; }
   function buildReport(winner) {
+    if (online.on) return buildReportOnline(winner);
     var m = stats.mud, sg = stats.sugar, h = '';
     var who = winner === aiP ? '糖包' : winner === humanP ? '泥巴菜鸡' : '';
     var how = winner === aiP ? 'KO' : winner === humanP ? '被菜鸡翻盘' : '平局';
@@ -1296,6 +1564,7 @@
   /* ---------- 对局流程 ---------- */
   function turnP() { return hist.length % 2 === 0 ? 1 : 2; }
   function newGame(aiFirst) {
+    if (online.on) onlineLeave();
     G.newGame();
     hist = []; snaps = [G.snapshot()];
     undoLeft = 2; over = false; thinking = false; lastMove = -1; winCells = null;
@@ -1320,12 +1589,23 @@
   }
   function updateCtrl() {
     $('undoLeft').textContent = undoLeft;
-    $('btnUndo').disabled = over || thinking || undoLeft <= 0;
+    $('btnUndo').disabled = over || thinking || undoLeft <= 0 ||
+      (online.on && (online.seat === 0 || !online.ready));
+    $('btnNew').textContent = online.on ? '认输' : '重开';
+    $('btnSwap').textContent = online.on ? '邀请' : '换先手';
+    $('btnNew').disabled = online.on ? (online.seat === 0 || over) : false;
     $('btnSwap').disabled = thinking;
   }
   function turn() {
     markTurn();
     if (over) return;
+    if (online.on) {                                   // 联机：只提示轮到谁，不跑 AI
+      var tp = turnP();
+      if (online.seat === 0) { castLine('围观中：' + seatName(1) + ' / ' + seatName(2) + ' 正在对局（可以发弹幕）'); return; }
+      if (tp === humanP) { turnStart = performance.now(); sayP(humanP, '轮到你了。'); }
+      else { sayP(tp, '……'); castLine('等 ' + seatName(tp) + ' 落子…'); }
+      return;
+    }
     if (turnP() === aiP) aiPlay();
     else { turnStart = performance.now(); say('mud', '该你了，落子吧。'); }
   }
@@ -1339,18 +1619,24 @@
   }
   function humanMove(cell) {
     var j = judge(cell, humanP);
-    stats.mud.ms += performance.now() - turnStart;
-    recordMove('mud', cell, j, hist.length + 1);
+    stats[keyOf(humanP)].ms += performance.now() - turnStart;
+    recordMove(humanP, cell, j, hist.length + 1);
     if (!commit(cell, humanP)) return;
     sfx.place();
     updateMeters();
     var line = G.winLine(cell, humanP);
     if (line) { endGame(humanP, line); return; }
     if (hist.length >= SZ) { endGame(0, null); return; }
+    if (online.on) {                                   // 联机：把这一手广播出去
+      netSend({ t: 'move', n: hist.length - 1, cell: cell });
+      if (online.host) broadcastState(false);
+      render(); updateCtrl(); turn();
+      return;
+    }
     /* 糖包的反应：菜鸡下手狠了会吓一跳 */
     var r2 = G.report(aiP);
     if (r2.win.length || (j.kind !== 'quiet' && j.kind !== 'blockThree' && j.my >= S.OPEN_THREE)) {
-      reaction('sugar', 'shock'); say('sugar', pick(SUGAR_SHOCK, 'sh'));
+      reaction(avatarOf(aiP), 'shock'); say('sugar', pick(SUGAR_SHOCK, 'sh'));
     } else if (j.played >= j.best - 1 && stats.mud.best % 3 === 0) {
       say('mud', pick(MUD_GOOD, 'good'));
     }
@@ -1400,6 +1686,7 @@
   }
   function undo() {
     if (over || thinking || undoLeft <= 0) return;
+    if (online.on) { onlineUndoAsk(); return; }        // 联机要对方同意
     var k = hist.length, removedHuman = false;
     while (k > 0 && hist[k - 1].p === aiP) k--;
     if (k > 0 && hist[k - 1].p === humanP) { k--; removedHuman = true; }
@@ -1422,31 +1709,63 @@
   function endGame(winner, line) {
     over = true; thinking = false; winCells = line; winAt = performance.now();
     $('think').classList.add('hide');
-    if (winner === aiP) { record.sugar++; record.blunders += stats.mud.blunder; sfx.lose(); }
-    else if (winner === humanP) { record.chick++; sfx.win(); }
-    else { record.draw++; sfx.undo(); }
-    record.games = (record.games || 0) + 1;
-    saveRecord(); showRecord(); updateCtrl(); markTurn();
-    if (winner === aiP) { reaction('sugar', 'happy'); reaction('mud', 'dead'); }
-    else if (winner === humanP) { reaction('mud', 'happy'); reaction('sugar', 'shock'); say('mud', pick(MUD_WIN, 'w')); }
+    if (online.on) {                                   // 联机记到联机战绩
+      if (winner === humanP) { record.onlineW = (record.onlineW || 0) + 1; sfx.win(); }
+      else if (winner) { record.onlineL = (record.onlineL || 0) + 1; sfx.lose(); }
+      else sfx.undo();
+      record.games = (record.games || 0) + 1;
+      record.blunders = (record.blunders || 0) + (stats.mud.blunder + stats.sugar.blunder);
+      saveRecord(); showRecord(); lbAfterGame(winner, hist.length);
+      if (online.host) broadcastState(true);
+    } else {
+      if (winner === aiP) { record.sugar++; record.blunders += stats.mud.blunder; sfx.lose(); }
+      else if (winner === humanP) { record.chick++; sfx.win(); }
+      else { record.draw++; sfx.undo(); }
+      record.games = (record.games || 0) + 1;
+      saveRecord(); showRecord(); lbAfterGame(winner, hist.length);
+    }
+    updateCtrl(); markTurn();
+    if (winner && winner !== 0) {
+      reaction(avatarOf(winner), 'happy'); reaction(avatarOf(3 - winner), 'dead');
+      if (winner === humanP && !online.on) say('mud', pick(MUD_WIN, 'w'));
+    }
     render();
     setTimeout(function () { showResult(winner); }, line ? 1600 : 400);
   }
   function showResult(winner) {
-    var head = winner === aiP ? '<h2>糖包赢了 🍬</h2><div class="sub">成绩单已出：' + pick(SUGAR_WIN, 'w') + '</div>'
-      : winner === humanP ? '<h2>不可能…你赢了？！</h2><div class="sub">糖包：一定是手机卡了。</div>'
-        : '<h2>平局</h2><div class="sub">泥巴和糖糊成一团了。</div>';
+    var head, buttons;
+    if (online.on) {
+      head = !winner ? '<h2>平局</h2><div class="sub">手数用尽，谁也没连成五。</div>'
+        : winner === humanP ? '<h2>你赢了 🏆</h2><div class="sub">' + seatName(humanP) + ' 拿下这一局，成绩单在下面。</div>'
+          : '<h2>' + seatName(winner) + ' 赢了</h2><div class="sub">成绩单已出，看看谁的绩点低。</div>';
+      buttons = '<button id="againAi">再来一局（等对方同意）</button>' +
+        '<button id="againMe" class="ghost">复制邀请链接（叫更多人来看）</button>' +
+        '<button id="againSame" class="ghost">先看看这盘棋</button>' +
+        '<button id="againBoard" class="ghost">看排行榜 🏆</button>';
+    } else {
+      head = winner === aiP ? '<h2>糖包赢了 🍬</h2><div class="sub">成绩单已出：' + pick(SUGAR_WIN, 'w') + '</div>'
+        : winner === humanP ? '<h2>不可能…你赢了？！</h2><div class="sub">糖包：一定是手机卡了。</div>'
+          : '<h2>平局</h2><div class="sub">泥巴和糖糊成一团了。</div>';
+      buttons = '<button id="againAi">再来一局（糖包先走）</button>' +
+        '<button id="againMe" class="ghost">再来一局（我先走）</button>' +
+        '<button id="againSame" class="ghost">先看看这盘棋</button>';
+    }
     $('panel').innerHTML = head +
-      '<div class="row">' +
-      '<button id="againAi">再来一局（糖包先走）</button>' +
-      '<button id="againMe" class="ghost">再来一局（我先走）</button>' +
-      '<button id="againSame" class="ghost">先看看这盘棋</button>' +
-      '</div>' + buildReport(winner) +
+      '<div class="row">' + buttons + '</div>' + buildReport(winner) +
       '<div class="tip">绩点看的是「漏挡 / 漏胜 / 大漏着」；棋盘上的泥渍就是你的挂科痕迹（笑）。<br>' +      '每局 2 次悔棋，只能悔自己的棋。</div>';
     $('ovl').classList.remove('hide');
-    $('againAi').onclick = function () { newGame(true); };
-    $('againMe').onclick = function () { newGame(false); };
+    $('againAi').onclick = function () {
+      if (!online.on) { newGame(true); return; }
+      netSend({ t: 'reset' });
+      castLine('已发出"再来一局"，等对方同意…');
+      $('ovl').classList.add('hide');
+    };
+    $('againMe').onclick = function () {
+      if (!online.on) { newGame(false); return; }
+      copyInvite();
+    };
     $('againSame').onclick = function () { $('ovl').classList.add('hide'); };
+    if ($('againBoard')) $('againBoard').onclick = function () { showLeaderboard(); };
     $('panel').scrollTop = 0;
   }
   function showStart() {
@@ -1456,23 +1775,587 @@
       '专业课没学明白，五子棋也没学明白。<br>' +
       '<span class="hi">糖包</span>＝食堂二楼三块五一个的糖包，被教务处偷偷塞了超算芯片，' +
       '现在专治菜鸡：<span class="hi">六层以上算路 + 连续冲四杀棋</span>，建成双活三、四三杀就一口吃掉你。放水？不存在的。</p>' +
-      '<p class="big">选谁先走：</p>' +
+      '<p class="big">怎么玩：</p>' +
       '<div class="row">' +
-      '<button id="stAi">糖包先走（推荐 · 你更没机会）</button>' +
-      '<button id="stMe" class="ghost">我先走（泥巴也要面子）</button>' +
+      '<button id="stAi">和糖包下（单机 · 它先走，你更没机会）</button>' +
+      '<button id="stMe" class="ghost">和糖包下（我先走 · 泥巴也要面子）</button>' +
+      '<button id="stOnline" class="ghost">联机对战（QQ群约战 · 群友点链接就能进）</button>' +
+      '<button id="stBoard" class="ghost">排行榜 🏆（全网积分榜）</button>' +
       '</div>' +
+      '<div id="onlineBox" class="hide"></div>' +
       '<p>下完给你出一份 <span class="hi">成绩单</span>：绩点评级、补考清单、漏挡漏胜、活三冲四各几手、' +
       '糖包第几手判定必胜 —— 数据糊脸，别不服。</p>' +
       '<div class="tip">2 次悔棋机会，只能悔自己的棋。<br>想赢糖包？宁财全校都还没人做到（它自己说的）。</div>';
     $('ovl').classList.remove('hide');
     $('stAi').onclick = function () { newGame(true); };
     $('stMe').onclick = function () { newGame(false); };
+    $('stOnline').onclick = showOnlinePanel;
+    $('stBoard').onclick = showLeaderboard;
+  }
+  /* 联机入口面板 */
+  function showOnlinePanel() {
+    var box = $('onlineBox');
+    box.className = 'ob';
+    box.innerHTML =
+      '<input id="nickIn" type="text" maxlength="10" placeholder="你的昵称（群里叫什么）" value="' + (savedNick() || '') + '">' +
+      '<div class="row" style="margin:0">' +
+      '<button id="oHost">开个新房间（我当房主 · 执泥巴先手）</button>' +
+      '<button id="oLobby" class="ghost">随机匹配（公共大厅 PUB1）</button>' +
+      '<input id="roomIn" type="text" maxlength="4" placeholder="输入 4 位房间号，加入群友的房间">' +
+      '<button id="oJoin" class="ghost">加入房间</button>' +
+      '</div>' +
+      '<div class="tip" id="oStat">开房后把链接发到 QQ 群，群友点开就能进。房间里超过 2 人自动变观众，可以发弹幕。</div>';
+    $('oHost').onclick = function () {
+      var r = globalThis.GomokuNet.roomCode();
+      onlineEnter(r, true);
+      $('ovl').classList.remove('hide');
+      $('panel').innerHTML = '<h2>房间开好了：' + r + '</h2>' +
+        '<div class="sub">把下面这段发到 QQ 群，群友点开就直接进这个房间</div>' +
+        '<div class="linkbox" id="linkBox">' + inviteLink() + '</div>' +
+        '<div class="row"><button id="copyLink">复制邀请链接</button>' +
+        '<button id="goRoom" class="ghost">先进房间等着（空着也没事）</button></div>' +
+        '<div class="tip">对方进来后自动接上；超过 2 人变观众（能发弹幕）。<br>房间里可以悔棋（对方同意）、认输、再来一局。</div>';
+      $('copyLink').onclick = function () { copyInvite(); $('ovl').classList.add('hide'); };
+      $('goRoom').onclick = function () { $('ovl').classList.add('hide'); };
+    };
+    $('oLobby').onclick = function () { onlineEnter('PUB1', false); };
+    $('oJoin').onclick = function () {
+      var r = ($('roomIn').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (r.length < 4) { $('oStat').textContent = '房间号是 4 位（例如 K7Q2），再检查一下'; return; }
+      onlineEnter(r, false);
+    };
+  }
+
+  /* ==========================================================================
+     联机对战（QQ 群约战）
+     协议（全部走同一房间通道，JSON）：
+       hello   {nick, host, seat}                 报到（房主带 host:1）
+       seat    {to, seat, nick}                   房主分配座位：1=泥巴(先手) 2=糖包 0=围观
+       seats   {1:nick, 2:nick}                   广播两边昵称
+       state   {moves:[cell…], first, n}          权威局面（房主发，用于同步/重连）
+       move    {n, cell}                          落子（n = 第几手，从 0 开始）
+       undo    {} / undoAck {ok}                  悔棋请求 / 应答
+       reset   {} / resetAck {ok}                 再来一局
+       resign  {}                                 认输
+       chat    {nick, text}                        群聊弹幕
+       sync    {}                                 请求对方补发 state
+       bye     {}                                  离开
+     ========================================================================== */
+  var online = {
+    on: false, room: '', nick: '', host: false, seat: 0,
+    net: null, ready: false, chan: -1, chanText: '', peer: '', nicks: { 1: '', 2: '' },
+    lastPeer: 0, lastStateLen: -1, adoptCount: 0, adoptAt: 0,
+    undoAsk: false, resetAsk: false, over: false
+  };
+
+  function savedNick() { try { return localStorage.getItem('mudGomokuNick') || ''; } catch (e) { return ''; } }
+  function saveNick(n) { try { localStorage.setItem('mudGomokuNick', n); } catch (e) { } }
+
+  function seatName(p) {
+    if (!online.on) return p === aiP ? '糖包' : '你';
+    if (p === online.seat) return (online.nick || '你');
+    return online.nicks[p] || ('座位' + p);
+  }
+  function sayP(p, text) {
+    $('bubbleWho').textContent = (p === humanP ? '' : '') + seatName(p) + '：';
+    $('bubbleTxt').textContent = text;
+    $('bubble').className = (p === humanP ? 'mud' : 'sugar');
+  }
+  function roomBar() {
+    if (!online.on) { $('room').classList.add('hide'); return; }
+    var st = ['房间 ' + online.room];
+    if (online.seat === 0) st.push('围观中（' + seatName(1) + ' vs ' + seatName(2) + '）');
+    else st.push(seatName(online.seat) + ' vs ' + seatName(3 - online.seat));
+    if (online.ready) st.push(online.chanText);
+    $('roomTxt').textContent = st.join(' · ');
+    $('room').classList.remove('hide');
+    $('btnRe').classList.toggle('hide', !!online.ready);
+  }
+  function netStatus(s, d) {
+    if (s === 'connected') { online.ready = true; $('room').style.opacity = ''; }
+    else if (s === 'failed') { castLine('联机通道连不上（' + (d || '') + '）· 点房间条上的"重连"或换个网络'); $('room').style.opacity = '.7'; }
+    else castLine('联机状态：' + (d || s));
+    roomBar();
+  }
+
+  function inviteLink() {
+    return location.origin + location.pathname + '?r=' + online.room;
+  }
+  function copyInvite() {
+    var link = inviteLink();
+    function ok() { castLine('邀请链接已复制，粘到 QQ 群里就行：' + link); }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(ok, function () { fallback(); });
+        return;
+      }
+    } catch (e) { }
+    fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = link; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy'); } catch (e) { }
+      document.body.removeChild(ta);
+      ok();
+    }
+  }
+
+  /* ---------- 进出房间 ---------- */
+  function onlineEnter(room, asHost) {
+    online.on = true; online.room = room; online.host = !!asHost; online.seat = asHost ? 1 : 0;
+    online.nicks = { 1: '', 2: '' }; online.over = false; online.lastStateLen = -1;
+    online.seatTaken2 = false; online.seat2Id = ''; online.helloAt = performance.now();
+    online.nick = ($('nickIn') && $('nickIn').value.trim()) || savedNick() || ('群友' + Math.floor(Math.random() * 90 + 10));
+    saveNick(online.nick);
+    try { history.replaceState(null, '', location.pathname + '?r=' + room + (asHost ? '&h=1' : '')); } catch (e) { }
+    resetStats();
+    onlineBoard();
+    $('ovl').classList.add('hide');
+    $('netbar').classList.remove('hide');
+    $('pun').classList.add('hide');
+    roomBar();
+    castLine('正在连接联机通道…');
+    online.net = globalThis.GomokuNet.connect({
+      room: room,
+      onStatus: netStatus,
+      onReady: function (info) {
+        online.ready = true; online.chan = info.chan;
+        online.chanText = info.transport + '·' + info.detail;
+        netSend({ t: 'hello', nick: online.nick, host: online.host ? 1 : 0, seat: online.seat });
+        netSend({ t: 'sync' });
+        castLine(info.reconnected ? '已重连（' + online.chanText + '）' : '已连上通道 ' + online.chanText + '，把房间号发到群里等人来');
+        roomBar();
+      },
+      onMsg: netMsg
+    });
+  }
+  function onlineLeave() {
+    if (!online.on) return;
+    netSend({ t: 'bye' });
+    if (online.net) online.net.close();
+    online.on = false; online.ready = false; online.seat = 0; online.net = null;
+    $('netbar').classList.add('hide');
+    $('prompt').classList.add('hide');
+    $('pun').classList.remove('hide');
+    $('room').classList.add('hide');
+    try { history.replaceState(null, '', location.pathname); } catch (e) { }
+    showStart();
+  }
+  function onlineBoard() {
+    G.newGame();
+    hist = []; snaps = [G.snapshot()];
+    undoLeft = 2; over = false; thinking = false; lastMove = -1; winCells = null;
+    popAt = {}; particles = []; hoverCell = -1;
+    humanP = online.seat === 2 ? 2 : 1;
+    aiP = 3 - humanP;
+    gameStart = performance.now();
+    resetStats();
+    roomBar(); updateCtrl(); markTurn(); render();
+  }
+  function netSend(o) { return online.net ? online.net.send(o) : false; }
+
+  /* ---------- 房主把局面广播出去 ---------- */
+  function broadcastState(force) {
+    if (!online.on) return;
+    if (!force && hist.length === online.lastStateLen) return;
+    online.lastStateLen = hist.length;
+    var mv = [];
+    for (var i = 0; i < hist.length; i++) mv.push(hist[i].i);
+    netSend({ t: 'state', moves: mv });
+  }
+  /* 用着法序列重建棋盘（同步/重连/悔棋都用它） */
+  function applyMoves(list) {
+    G.newGame();
+    hist = []; snaps = [G.snapshot()];
+    for (var i = 0; i < list.length; i++) {
+      var p = i % 2 === 0 ? 1 : 2;
+      if (!G.play(list[i], p)) break;
+      hist.push({ i: list[i], p: p });
+      snaps.push(G.snapshot());
+    }
+    lastMove = hist.length ? hist[hist.length - 1].i : -1;
+    winCells = null; over = false;
+    resetStats();
+    render(); updateCtrl(); markTurn();
+    if (hist.length) {
+      var last = hist[hist.length - 1];
+      var ln = G.winLine(last.i, last.p);
+      if (ln) endGame(last.p, ln);
+    }
+  }
+  function netMsg(m) {
+    if (m.from !== 'sys') online.lastPeer = performance.now();
+    /* 通道不一致：客人跟随房主；否则往小号通道靠 */
+    if (typeof m.ch === 'number' && m.ch >= 0 && online.chan !== m.ch && m.t !== 'bye') {
+      var mine = online.chan;
+      if (mine >= 0 && mine !== m.ch) {
+        var now = performance.now();
+        if (now - online.adoptAt > 6000 && online.adoptCount < 3 && m.ch < mine) {
+          online.adoptAt = now; online.adoptCount++;
+          online.net.adopt(m.ch);
+          castLine('与对方不在同一通道，正在切到 ' + m.ch + ' 号通道…');
+          return;
+        }
+      }
+    }
+    switch (m.t) {
+      case 'hello':
+        if (m.host) { if (m.seat === 1) online.sawHost = true; else if (online.host) { online.sawHost = true; } }
+        if (m.nick) { if (m.seat === 1 || m.seat === 2) online.nicks[m.seat] = m.nick; online.peer = m.from; }
+        if (online.host) {                              // 房主：分配座位
+          online.peer = m.from;
+          if (!online.seatTaken2 && m.seat !== 1) {
+            online.seatTaken2 = true;
+            online.nicks[2] = m.nick || '群友';
+            online.nicks[1] = online.nick;
+            online.seat2Id = m.from;
+            netSend({ t: 'seat', to: m.from, seat: 2, nick: online.nick });
+            netSend({ t: 'seats', nick1: online.nick, nick2: online.nicks[2] });
+            broadcastState(true);
+            castLine('对手来了：' + online.nicks[2] + '（' + online.room + ' 房间开打）');
+            sayP(2, '来了？那就开始吧。');
+          } else if (m.seat !== 1) {
+            netSend({ t: 'seat', to: m.from, seat: 0 });
+            netSend({ t: 'seats', nick1: online.nick, nick2: online.nicks[2] || '' });   // 后进来的观众也能看到两边名字
+            if (hist.length) broadcastState(true);
+            castLine('又进来一位：' + (m.nick || '群友') + ' 先当观众（这局两人在打）');
+          }
+        }
+        roomBar();
+        break;
+      case 'seat':
+        if (m.to === (online.net && online.net.id) || !m.to) {
+          online.seat = m.seat;
+          if (m.seat === 2 && m.nick) online.nicks[1] = m.nick;
+          humanP = online.seat === 2 ? 2 : 1; aiP = 3 - humanP;
+          if (m.seat === 1) online.nicks[1] = online.nick;
+          if (m.seat === 2) online.nicks[2] = online.nick;
+          roomBar(); markTurn(); render();
+          if (m.seat === 0) castLine('房间里已经有两个人在打了，你先围观（可以发弹幕）');
+          else { castLine('你是 ' + (m.seat === 1 ? '泥巴方（先手）' : '糖包方（后手）')); netSend({ t: 'sync' }); }
+        }
+        break;
+      case 'seats':
+        online.sawHost = true;
+        if (m.nick1) online.nicks[1] = m.nick1;
+        if (m.nick2) online.nicks[2] = m.nick2;
+        roomBar(); break;
+      case 'state':
+        online.sawHost = true;
+        online.nicks[1] = online.nicks[1] || (m.nick1 || '');
+        if (m.moves && m.moves.length !== hist.length) applyMoves(m.moves);
+        break;
+      case 'move':
+        if (m.n > hist.length) { netSend({ t: 'sync' }); break; }
+        if (m.n < hist.length) break;
+        onlineApply(m.cell, m.n);
+        break;
+      case 'sync':
+        if (online.seat === 1 && hist.length) broadcastState(true);
+        break;
+      case 'undo':
+        if (online.seat === 0 || (m.seat !== 1 && m.seat !== 2)) break;
+        onlinePrompt(seatName(m.seat) + ' 想悔棋（撤两手）', function () {
+          netSend({ t: 'undoAck', ok: true, seat: online.seat });
+          doUndoLocal();
+        }, function () { netSend({ t: 'undoAck', ok: false }); castLine('你拒绝了对方的悔棋'); });
+        break;
+      case 'undoAck':
+        if (m.ok) { doUndoLocal(); castLine('对方同意悔棋，撤了两手'); }
+        else castLine('对方拒绝了你的悔棋请求');
+        break;
+      case 'reset':
+        onlinePrompt('对方想再来一局', function () {
+          netSend({ t: 'resetAck', ok: true }); onlineBoard(); castLine('新的一局，开打！');
+        }, function () { netSend({ t: 'resetAck', ok: false }); castLine('你拒绝了再来一局'); });
+        break;
+      case 'resetAck':
+        if (m.ok) { onlineBoard(); castLine('对方同意，新的一局开始'); }
+        else castLine('对方暂时不想再来一局');
+        break;
+      case 'resign':
+        endGame(humanP, null);
+        castLine('对方认输了，你赢了！');
+        break;
+      case 'chat':
+        sayP(m.side === 2 ? 2 : 1, m.text);
+        break;
+      case 'bye':
+        if (online.host && m.from === online.seat2Id) {      // 2 号位走了，腾出来给回来的人
+          online.seatTaken2 = false; online.seat2Id = '';
+          online.nicks[2] = '';
+          netSend({ t: 'seats', nick1: online.nick, nick2: '' });
+          roomBar();
+          castLine('对手离开了房间，2 号位空出来了（房间号 ' + online.room + '，让群友点链接回来就能接着下）');
+        } else castLine('有人离开了房间（房间号 ' + online.room + ' 还在，回来会自动同步）');
+        break;
+    }
+  }
+
+  function onlineApply(cell) {
+    if (cell < 0 || cell > 224 || G.board()[cell] !== 0) return;
+    var p = hist.length % 2 === 0 ? 1 : 2;
+    var j = judge(cell, p);
+    recordMove(p, cell, j, hist.length + 1);
+    if (!commit(cell, p)) return;
+    sfx.place();
+    updateMeters();
+    var ln = G.winLine(cell, p);
+    if (ln) { endGame(p, ln); return; }
+    if (hist.length >= SZ) { endGame(0, null); return; }
+    if (online.host) broadcastState(false);
+    render(); updateCtrl(); turn();
+  }
+  function doUndoLocal() {
+    if (!hist.length) return;
+    var k = Math.max(0, hist.length - 2);          // 固定撤两手，两边算法一致
+    var list = [];
+    for (var i = 0; i < k; i++) list.push(hist[i].i);
+    applyMoves(list);
+    if (online.host) broadcastState(true);
+  }
+  function onlinePrompt(text, onYes, onNo) {
+    $('promptTxt').textContent = text;
+    $('prompt').classList.remove('hide');
+    $('promptYes').onclick = function () { $('prompt').classList.add('hide'); onYes(); };
+    $('promptNo').onclick = function () { $('prompt').classList.add('hide'); onNo(); };
+  }
+  function onlineUndoAsk() {
+    if (undoLeft <= 0) { castLine('悔棋机会用完了（每局 2 次）'); return; }
+    if (!online.ready) { castLine('还没连上通道，等一下再点'); return; }
+    undoLeft--; updateCtrl();
+    netSend({ t: 'undo', seat: online.seat });
+    castLine('已发出悔棋请求，等对方同意…');
+  }
+  function onlineChat() {
+    var t = $('chatIn').value.trim();
+    if (!t) return;
+    $('chatIn').value = '';
+    netSend({ t: 'chat', nick: online.nick, side: online.seat, text: t.slice(0, 40) });
+    sayP(humanP, online.nick + '：' + t.slice(0, 40));
+  }
+  /* 每 400ms 心跳：房主补发局面 / 掉线提示 / 房主失效接管 */
+  setInterval(function () {
+    if (!online.on) return;
+    if (!online.host && online.seat === 0 && online.ready && online.helloAt &&
+        performance.now() - online.helloAt > 15000 && !online.sawHost) {
+      online.host = true; online.seat = 1; online.seatTaken2 = false; online.seat2Id = '';
+      online.nicks[1] = online.nick; humanP = 1; aiP = 2;
+      online.sawHost = true;
+      netSend({ t: 'hello', nick: online.nick, host: 1, seat: 1 });
+      netSend({ t: 'seats', nick1: online.nick, nick2: '' });
+      castLine('房主好像不在了，你接替他当房主（执泥巴·先手）');
+      roomBar(); markTurn(); render();
+    }
+    if (online.seat === 1 && online.ready && !over) broadcastState(false);
+    if (online.ready && online.lastPeer && performance.now() - online.lastPeer > 25000 && !over) {
+      castLine('对方好像掉线了…等他回来会自动同步（房间号 ' + online.room + '）');
+      online.lastPeer = performance.now() + 1e7;
+    }
+    roomBar();
+  }, 400);
+
+  /* ---------- 联机版成绩单（双方都有） ---------- */
+  function buildReportOnline(winner) {
+    var s1 = stats.mud, s2 = stats.sugar, n1 = seatName(1), n2 = seatName(2);
+    var h = '';
+    var avg = function (s) { return s.moves ? s.ms / s.moves : 0; };
+    var dur = Math.max(1, Math.round((performance.now() - gameStart) / 1000));
+    h += '<div class="warbox">' +
+      '<b>房间：</b>' + online.room + ' · 通道 ' + (online.chanText || '-') + ' · 共 ' + hist.length + ' 手 · 用时约 ' + dur + ' 秒' +
+      '<br><b>对局：</b>' + n1 + '（泥巴·先手） vs ' + n2 + '（糖包·后手）' +
+      (winner ? ' —— <b>' + seatName(winner) + ' 获胜</b>' : ' —— 平局') +
+      '<br><b>手速：</b>' + n1 + ' 平均 ' + (avg(s1) / 1000).toFixed(1) + ' 秒/手 · ' +
+      n2 + ' 平均 ' + (avg(s2) / 1000).toFixed(1) + ' 秒/手' +
+      '</div>';
+    var rows = [[n1, s1, 'mud'], [n2, s2, 'sugar']];
+    var gradeRows = '';
+    rows.forEach(function (r) {
+      var g = gradeOf(r[1]);
+      gradeRows += '<tr><td class="k">' + r[0] + '</td>' +
+        '<td class="m" style="color:' + g.c + '">' + g.gpa + '（' + g.g + '）</td>' +
+        '<td class="' + r[2] + '" style="text-align:left;font-size:11px">' + g.t + '</td></tr>';
+    });
+    h += sec('成绩单（双方）', '<table class="st"><tr><th></th><th>绩点</th><th>评语</th></tr>' + gradeRows + '</table>');
+    h += sec('战术统计', '<table class="st">' +
+      '<tr><th></th><th>' + n1 + '</th><th>' + n2 + '</th></tr>' +
+      row3('落子手数', s1.moves, s2.moves) +
+      row3('活三', s1.three, s2.three) +
+      row3('冲四 / 挡冲四', s1.four + ' / ' + s1.blockFour, s2.four + ' / ' + s2.blockFour) +
+      row3('活四 / 成五', s1.openFour + ' / ' + s1.five, s2.openFour + ' / ' + s2.five) +
+      row3('挡活三', s1.blockThree, s2.blockThree) +
+      row3('闲手', s1.quiet, s2.quiet) +
+      row3('失误 / 正着', s1.blunder + ' / ' + s1.best, s2.blunder + ' / ' + s2.best) +
+      row3('最高评分', s1.topCell >= 0 ? nm(s1.topCell) + ' (' + Math.round(s1.topScore) + ')' : '—',
+        s2.topCell >= 0 ? nm(s2.topCell) + ' (' + Math.round(s2.topScore) + ')' : '—') +
+      '</table>');
+    var li = '';
+    stats.mistakes.slice(0, 6).forEach(function (k) {
+      li += '<li>第 <b>' + k.ply + '</b> 手 <b>' + nm(k.cell) + '</b> —— ' + k.tag +
+        (k.suggest >= 0 && k.suggest !== k.cell ? '，其实该下 <i>' + nm(k.suggest) + '</i>' : '') + '</li>';
+    });
+    h += sec('补考清单（全场失误）', li ? '<ul class="mist">' + li + '</ul>'
+      : '<div class="tip" style="text-align:left">两位都零挂科，这局质量不错。</div>');
+    if (stats.mistakes.length) {
+      var k0 = stats.mistakes[0];
+      h += sec('本局转折点', '<div class="tip" style="text-align:left">第 <b style="color:#ffcf7a">' + k0.ply +
+        '</b> 手 <b style="color:#ffcf7a">' + nm(k0.cell) + '</b> —— ' + k0.tag + '，从这里开始天平移了。</div>');
+    }
+    h += '<div class="tip">房间号 ' + online.room + ' 还能继续用：让群友点链接进来就能接着下（多的人自动当观众，可以发弹幕）。</div>';
+    return h;
+  }
+
+  /* ==========================================================================
+     排行榜：本地战绩 + 全网共享榜
+     共享榜用"最后一个写入者覆盖"的方式挂在公共通道上（MQTT retain / ntfy 缓存），
+     所以即使没有后端，晚来的人也能读到榜（retain/缓存消息一进房间就到手）。
+     成绩是各人手机自己上报的，只为图个乐；同昵称取较高积分。
+     ========================================================================== */
+  var LB_ROOM = 'TOP1';
+  var lb = { net: null, ready: false, entries: {}, open: false, gotShared: false };
+
+  function lbScore(e) {
+    var s = (e.w || 0) * 10;
+    if (e.ko) s += Math.max(0, 30 - e.ko);        // 越快取胜加分越多
+    s -= Math.round((e.bl || 0) * 1.5);           // 失误扣分
+    if (e.d) s += (e.d || 0) * 2;
+    return s;
+  }
+  function lbMine() {
+    var nick = (online.on && online.nick) || savedNick() || '匿名泥巴';
+    var e = {
+      nick: nick,
+      w: (record.chick || 0) + (record.onlineW || 0),
+      l: (record.sugar || 0) + (record.onlineL || 0),
+      d: record.draw || 0,
+      bl: record.blunders || 0,
+      ko: record.fastWin || 0,
+      ts: Date.now()
+    };
+    e.pts = lbScore(e);
+    return e;
+  }
+  function lbSorted() {
+    var arr = [];
+    for (var k in lb.entries) if (lb.entries[k]) arr.push(lb.entries[k]);
+    arr.sort(function (a, b) { return (b.pts || 0) - (a.pts || 0); });
+    return arr.slice(0, 20);
+  }
+  function lbPublish(retain) {
+    if (!lb.net || !lb.ready) return false;
+    var me = lbMine();
+    lb.entries[me.nick] = me;
+    netLbSend({ t: 'lb', board: lbSorted(), nick: me.nick }, retain !== false);
+    return true;
+  }
+  function netLbSend(o, retain) { if (lb.net) lb.net.send(o, retain); }
+  function lbConnect() {
+    if (lb.net) { lbPublish(true); return; }
+    lb.net = globalThis.GomokuNet.connect({
+      room: LB_ROOM, since: 'all',
+      onStatus: function (s, d) {
+        if (s === 'failed') { if (lb.open) lbRender('榜单暂时连不上（' + (d || '') + '），下面是你本机的战绩'); }
+      },
+      onReady: function (info) {
+        lb.ready = true;
+        netLbSend({ t: 'lb-req' });
+        lbPublish(true);
+        if (lb.open) lbRender();
+      },
+      onMsg: function (m) {
+        if (m.t === 'lb-req') { lbPublish(true); return; }
+        if (m.t !== 'lb' || !m.board) return;
+        lb.gotShared = true;
+        var mine = lbMine().nick, changed = false;
+        m.board.forEach(function (e) {
+          if (!e || !e.nick || e.nick === mine) return;
+          var cur = lb.entries[e.nick];
+          if (!cur || (e.pts | 0) >= (cur.pts | 0)) { lb.entries[e.nick] = e; changed = true; }
+        });
+        if (changed) lbPublish(true);
+        if (lb.open) lbRender();
+      }
+    });
+  }
+  function lbRows() {
+    var mine = lbMine(), arr = lbSorted(), found = false, h = '';
+    arr.forEach(function (e, i) {
+      var isMe = e.nick === mine.nick;
+      if (isMe) found = true;
+      h += '<tr' + (isMe ? ' style="background:rgba(255,198,92,.14)"' : '') + '>' +
+        '<td>' + (i + 1) + (i === 0 ? ' 🥇' : i === 1 ? ' 🥈' : i === 2 ? ' 🥉' : '') + '</td>' +
+        '<td class="k" style="text-align:left">' + e.nick + (isMe ? '（你）' : '') + '</td>' +
+        '<td class="m">' + (e.w || 0) + '</td><td>' + (e.l || 0) + '</td>' +
+        '<td>' + (e.ko ? e.ko + ' 手' : '—') + '</td><td>' + (e.bl || 0) + '</td>' +
+        '<td class="s">' + (e.pts || 0) + '</td></tr>';
+    });
+    if (!found) {
+      h += '<tr style="background:rgba(255,198,92,.14)"><td>—</td>' +
+        '<td class="k" style="text-align:left">' + mine.nick + '（你）</td>' +
+        '<td class="m">' + mine.w + '</td><td>' + mine.l + '</td>' +
+        '<td>' + (mine.ko ? mine.ko + ' 手' : '—') + '</td><td>' + mine.bl + '</td>' +
+        '<td class="s">' + mine.pts + '</td></tr>';
+    }
+    return h;
+  }
+  function lbRender(msg) {
+    var mine = lbMine();
+    var body = '<table class="st"><tr><th>名次</th><th>昵称</th><th>胜</th><th>负</th><th>最快取胜</th><th>失误</th><th>积分</th></tr>' +
+      lbRows() + '</table>';
+    $('panel').innerHTML = '<h2>排行榜 🏆</h2>' +
+      '<div class="sub">全网泥巴菜鸡总榜（房间 ' + LB_ROOM + '）</div>' +
+      (msg ? '<div class="tip">' + msg + '</div>' : '') +
+      sec('共享榜', body +
+        '<div class="tip" style="text-align:left">积分 = 胜×10 + 最快取胜奖励 − 失误×1.5 + 平×2。<br>' +
+        (lb.ready ? '已连上榜单通道，成绩会自动上报（同昵称取较高分）。'
+          : '正在连接榜单通道…本机成绩先在下面，连上就自动上报。') + '</div>') +
+      sec('我的本机战绩',
+        '<table class="st">' +
+        row3('和糖包下', '你赢 ' + (record.chick || 0), '糖包赢 ' + (record.sugar || 0)) +
+        row3('联机对战', '你赢 ' + (record.onlineW || 0), '你输 ' + (record.onlineL || 0)) +
+        row3('平局', record.draw || 0, '总局数 ' + (record.games || 0)) +
+        row3('最快取胜', (record.fastWin ? record.fastWin + ' 手' : '—'), '生涯失误 ' + (record.blunders || 0)) +
+        '</table>') +
+      '<div class="row">' +
+      '<button id="lbUp">上报我的成绩</button>' +
+      '<button id="lbBack" class="ghost">返回</button></div>' +
+      '<div class="tip">榜单挂在公共通道上，成绩是各人手机自己上报的，只为图个乐（也可能被人乱报）。</div>';
+    $('lbUp').onclick = function () { lbPublish(true); lbRender('已上报：' + mine.nick + '（积分 ' + mine.pts + '）'); };
+    $('lbBack').onclick = function () { lb.open = false; showStart(); };
+  }
+  function showLeaderboard() {
+    lb.open = true;
+    lbRender();
+    lbConnect();
+  }
+  /* 一局结束后：更新最快取胜记录，并（若榜单已连接）上报 */
+  function lbAfterGame(winner, plies) {
+    if (winner === humanP && (!record.fastWin || plies < record.fastWin)) record.fastWin = plies;
+    saveRecord();
+    if (lb.ready) lbPublish(true);
   }
 
   /* ---------- 绑定 ---------- */
   $('btnUndo').onclick = undo;
-  $('btnNew').onclick = function () { if (!thinking) newGame(aiP === 1); };
-  $('btnSwap').onclick = function () { if (!thinking) newGame(aiP !== 1); };
+  $('btnNew').onclick = function () {
+    if (thinking) return;
+    if (!online.on) newGame(aiP === 1);
+    else if (online.seat === 0 || over) return;
+    else onlinePrompt('确定认输？这局就算对方赢', function () {
+      netSend({ t: 'resign' });
+      endGame(3 - humanP, null);
+    }, function () { });
+  };
+  $('btnSwap').onclick = function () {
+    if (thinking) return;
+    if (!online.on) newGame(aiP !== 1);
+    else copyInvite();
+  };
+  $('btnLeave').onclick = onlineLeave;
+  $('btnRe').onclick = function () { if (online.net) { online.net.retryNow(); castLine('正在重连联机通道…'); } };
+  $('chatSend').onclick = onlineChat;
+  $('chatIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') onlineChat(); });
   $('btnSound').onclick = function () {
     sndOn = !sndOn;
     $('btnSound').textContent = sndOn ? '🔊' : '🔇';
@@ -1486,6 +2369,19 @@
   resetStats();
   layout();
   showRecord();
+  /* 从 QQ 群点链接进来：?r=房间号 自动入房（&h=1 表示自己是房主） */
+  (function autoJoin() {
+    try {
+      var sp = new URLSearchParams(location.search);
+      var r = (sp.get('r') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (r.length >= 4) {
+        showStart();                       // 先把开始面板渲染出来，onlineBox 才存在
+        showOnlinePanel();
+        $('oStat').textContent = '正在进入房间 ' + r + '…';
+        onlineEnter(r, sp.get('h') === '1');
+      }
+    } catch (e) { }
+  })();
   updateCtrl();
   requestAnimationFrame(loop);
   setTimeout(function () { layout(); }, 120);
