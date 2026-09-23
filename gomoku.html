@@ -4,46 +4,68 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#2b1a0e">
-<meta name="description" content="泥巴菜鸡战糖包 · 手机上玩的五子棋，糖包超算零败">
-<title>泥巴菜鸡战糖包 · 五子棋</title>
+<meta name="description" content="泥巴菜鸡（宁波财经谐音）战糖包 · 手机五子棋，糖包超算零败，赛后出成绩单">
+<title>泥巴菜鸡（宁波财经）战糖包 · 五子棋</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;background:#180f07;
     font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
-    -webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none;
-    color:#f3e3cb}
-  #app{position:fixed;inset:0;display:flex;flex-direction:column;gap:6px;
-    padding:calc(8px + env(safe-area-inset-top)) 10px calc(9px + env(safe-area-inset-bottom));
+    -webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none;color:#f3e3cb}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;gap:5px;
+    padding:calc(7px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
     background:
       radial-gradient(85% 55% at 50% -8%,rgba(146,104,60,.95) 0%,rgba(146,104,60,0) 62%),
       radial-gradient(120% 80% at 50% 112%,rgba(24,14,5,.95) 0%,rgba(24,14,5,0) 58%),
       linear-gradient(180deg,#5c3f26 0%,#33200f 55%,#1a1007 100%)}
-  /* 背景泥点 */
-  .splat{position:absolute;border-radius:50%;pointer-events:none;filter:blur(7px);opacity:.3}
   #hd{position:relative;text-align:center}
-  #hd h1{margin:0;font-size:min(6.6vw,25px);letter-spacing:1px;color:#ffdfae;
+  #hd h1{margin:0;font-size:min(6.4vw,24px);letter-spacing:1px;color:#ffdfae;
     text-shadow:0 2px 0 #3a2210,0 0 14px rgba(255,186,88,.32)}
   #hd h1 .vs{color:#ffb347;font-size:.72em;margin:0 5px}
-  #record{font-size:11.5px;color:#c9ab84;margin-top:3px;letter-spacing:.4px}
+  #pun{font-size:9.5px;color:#c79a63;letter-spacing:.6px;margin-top:1px;opacity:.9}
+  #pun b{color:#ffcb76}
+  #record{font-size:11px;color:#c9ab84;margin-top:2px;letter-spacing:.3px}
   #record b{color:#ffd07a}
   #cards{display:flex;gap:8px}
-  .card{flex:1;display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:15px;min-width:0;
+  .card{flex:1;display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:15px;min-width:0;
     background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.22));
     border:1.5px solid rgba(255,214,160,.13);transition:border-color .25s,box-shadow .25s,background .25s}
   .card.on{border-color:#ffc65c;background:linear-gradient(180deg,rgba(255,198,92,.16),rgba(0,0,0,.24));
     box-shadow:0 0 0 1px rgba(255,198,92,.3),0 0 18px rgba(255,170,60,.25)}
-  .card .ava{width:38px;height:38px;flex:0 0 38px}
+  .card .ava{width:38px;height:38px;flex:0 0 38px;position:relative}
   .card .ava svg{width:100%;height:100%;display:block}
   .card .meta{min-width:0;display:flex;flex-direction:column;gap:2px}
-  .card .meta b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .tag{font-size:9.5px;padding:1px 6px;border-radius:8px;align-self:flex-start;
-    background:rgba(0,0,0,.32);color:#f0d9b5;letter-spacing:.5px}
+  .card .meta b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .tag{font-size:9px;padding:1px 6px;border-radius:8px;align-self:flex-start;
+    background:rgba(0,0,0,.32);color:#f0d9b5;letter-spacing:.4px}
   .card .tag.ai{background:rgba(255,190,80,.22);color:#ffd88f}
-  #bubble{display:flex;gap:6px;padding:7px 10px;border-radius:12px;min-height:36px;align-items:center;
-    background:rgba(0,0,0,.26);border:1px solid rgba(255,255,255,.06);font-size:12.5px;line-height:1.35;color:#eeddc2}
+  /* ---- 头像表情 ---- */
+  .ava .rc{position:absolute;right:-3px;top:-5px;font-size:13px;opacity:0;transition:opacity .18s;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));pointer-events:none}
+  .ava.r-sweat .rc-sweat,.ava.r-happy .rc-happy,.ava.r-panic .rc-panic,.ava.r-dead .rc-dead,
+  .ava.r-smug .rc-smug,.ava.r-shock .rc-shock,.ava.r-worry .rc-worry{opacity:1}
+  .ava.r-panic{animation:shiver .34s infinite}
+  @keyframes shiver{0%,100%{transform:translate(0,0)}25%{transform:translate(-1.5px,1px) rotate(-2deg)}75%{transform:translate(1.5px,-1px) rotate(2deg)}}
+  .ava.r-happy{animation:hop .52s 2}
+  @keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px) scale(1.07)}}
+  .ava.r-smug{animation:sway 1.3s infinite}
+  @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+  .ava.r-worry{animation:shiver .6s 2}
+  .ava.r-dead{transform:rotate(84deg) scale(.88);filter:grayscale(.65) brightness(.85);transition:.5s}
+  #bubble{display:flex;gap:6px;padding:6px 10px;border-radius:12px;min-height:34px;align-items:center;
+    background:rgba(0,0,0,.26);border:1px solid rgba(255,255,255,.06);font-size:12.5px;line-height:1.32;color:#eeddc2}
   #bubble b{flex:none;color:#ffcf7a}
   #bubble.sugar b{color:#ffe3a8}
   #bubble.mud b{color:#e8b884}
+  /* ---- 泥巴度 / 糖分 ---- */
+  #meters{display:flex;align-items:center;gap:6px;font-size:10px;color:#bda078;letter-spacing:.3px}
+  .meter{flex:1;height:8px;border-radius:5px;overflow:hidden;background:rgba(0,0,0,.4);
+    border:1px solid rgba(255,255,255,.07)}
+  .meter i{display:block;height:100%;width:50%;transition:width .5s cubic-bezier(.3,.9,.3,1)}
+  #meterMud i{background:linear-gradient(90deg,#7b5024,#c08a4e)}
+  #meterSugar i{background:linear-gradient(90deg,#e7c68e,#fffaf0)}
+  #cast{font-size:10.5px;color:#a9927a;line-height:1.35;min-height:14px;padding:0 2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cast b{color:#ffcb76;font-weight:600}
   #boardWrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
   #board{touch-action:none;display:block;border-radius:16px;
     box-shadow:0 12px 28px rgba(0,0,0,.55),0 0 0 3px rgba(255,214,160,.16)}
@@ -51,39 +73,58 @@
     align-items:center;padding:5px 13px;border-radius:999px;font-size:11.5px;color:#ffd493;
     background:rgba(20,12,5,.85);border:1px solid rgba(255,205,120,.32);white-space:nowrap}
   #think.hide{display:none}
-  #think i{width:10px;height:10px;border-radius:50%;border:2px solid #ffcf7a;border-top-color:transparent;
-    animation:spin .7s linear infinite}
+  #think i{width:10px;height:10px;border-radius:50%;border:2px solid #ffcf7a;border-top-color:transparent;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   #ctrl{display:flex;gap:8px}
-  #ctrl button{flex:1;padding:11px 4px;border-radius:14px;font-size:13.5px;font-weight:700;font-family:inherit;
+  #ctrl button{flex:1;padding:10px 4px;border-radius:14px;font-size:13.5px;font-weight:700;font-family:inherit;
     color:#ffeacb;background:linear-gradient(180deg,#7c5230,#472c16);
     border:1.5px solid rgba(255,206,140,.32);box-shadow:0 3px 0 #24160a,0 6px 14px rgba(0,0,0,.3)}
   #ctrl button:active{transform:translateY(2px);box-shadow:0 1px 0 #24160a}
   #ctrl button:disabled{opacity:.42;filter:grayscale(.6)}
   #ctrl button em{font-style:normal;color:#ffd166}
-  #ctrl #btnSound{flex:0 0 46px;font-size:16px}
-  #ovl{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;
+  #ctrl #btnSound{flex:0 0 44px;font-size:16px}
+  /* ---- 弹层 ---- */
+  #ovl{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:14px;
     background:radial-gradient(65% 55% at 50% 42%,rgba(74,48,22,.9),rgba(10,6,2,.95))}
   #ovl.hide{display:none}
-  #panel{width:min(92vw,392px);max-height:88vh;overflow:auto;text-align:center;border-radius:20px;padding:18px 18px 20px;
+  #panel{width:min(93vw,404px);max-height:90vh;overflow:auto;text-align:center;border-radius:20px;padding:16px 15px 18px;
     background:linear-gradient(180deg,#4d3219,#28180b);border:2px solid rgba(255,199,120,.38);
     box-shadow:0 22px 50px rgba(0,0,0,.6),inset 0 0 40px rgba(0,0,0,.35)}
-  #panel h2{margin:0 0 4px;font-size:21px;color:#ffd79a;letter-spacing:1px;text-shadow:0 2px 0 #2a1708}
-  #panel .sub{font-size:12px;color:#c8ab86;letter-spacing:.5px}
-  #panel p{font-size:12.5px;line-height:1.75;color:#d8c2a2;margin:9px 0}
-  #panel .big{font-size:14.5px;color:#fff0d5;font-weight:700}
+  #panel h2{margin:0 0 3px;font-size:20px;color:#ffd79a;letter-spacing:1px;text-shadow:0 2px 0 #2a1708}
+  #panel .sub{font-size:12px;color:#c8ab86}
+  #panel p{font-size:12.5px;line-height:1.7;color:#d8c2a2;margin:8px 0}
+  #panel .big{font-size:14px;color:#fff0d5;font-weight:700}
   #panel .hi{color:#ffcf7a;font-weight:700}
-  .row{display:flex;flex-direction:column;gap:9px;margin-top:13px}
-  .row button{padding:13px;border-radius:14px;font-size:14.5px;font-weight:800;font-family:inherit;letter-spacing:.5px;
+  .row{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px}
+  .row button{padding:12px;border-radius:14px;font-size:14.5px;font-weight:800;font-family:inherit;letter-spacing:.5px;
     color:#3a2208;background:linear-gradient(180deg,#ffd79a,#efb057);border:none;box-shadow:0 3px 0 #a9702c}
   .row button.ghost{background:linear-gradient(180deg,#6b4526,#3a2513);color:#ffe6c4;
-    border:1.5px solid rgba(255,205,140,.28);box-shadow:0 3px 0 #21140a}
+    border:1.5px solid rgba(255,205,140,.28);box-shadow:0 3px 0 #21140a;font-weight:600;font-size:13.5px}
   .row button:active{transform:translateY(2px)}
-  .tip{font-size:11px;color:#a98f70;margin-top:10px;line-height:1.6}
+  .tip{font-size:11px;color:#a98f70;margin-top:9px;line-height:1.6}
+  /* ---- 战术统计 ---- */
+  .warbox{margin:10px 0 4px;padding:9px 11px;border-radius:13px;text-align:left;font-size:12px;line-height:1.68;
+    background:rgba(0,0,0,.28);border:1px dashed rgba(255,205,140,.3);color:#e7d3b3}
+  .warbox b{color:#ffcf7a}
+  .sec{margin-top:12px;text-align:left}
+  .sec h3{margin:0 0 6px;font-size:12.5px;color:#ffca7d;letter-spacing:.6px;
+    border-left:3px solid #ffb347;padding-left:7px}
+  table.st{width:100%;border-collapse:collapse;font-size:11.5px;color:#e2cdaa}
+  table.st th,table.st td{padding:4px 5px;text-align:center;border-bottom:1px solid rgba(255,255,255,.07)}
+  table.st th{color:#bda078;font-weight:600;font-size:10.5px}
+  table.st td.k{text-align:left;color:#b9a186}
+  table.st td.m{color:#e8b884;font-weight:700}
+  table.st td.s{color:#ffe3a8;font-weight:700}
+  ul.mist{margin:4px 0 0;padding-left:16px;font-size:11.5px;line-height:1.75;color:#dcc5a4}
+  ul.mist li b{color:#ff9f7a}
+  ul.mist li i{font-style:normal;color:#9fdcb0}
+  .grade{display:inline-block;padding:2px 9px;border-radius:9px;font-weight:800;font-size:12px;
+    background:rgba(0,0,0,.32);margin-left:4px}
   @media (orientation:landscape) and (max-height:620px){
-    #app{display:grid;grid-template-columns:min(46vw,330px) 1fr;grid-template-rows:auto auto auto 1fr;
-      grid-template-areas:"hd board" "cards board" "bubble board" "ctrl board";gap:6px 10px}
-    #hd{grid-area:hd}#cards{grid-area:cards}#bubble{grid-area:bubble}#boardWrap{grid-area:board}#ctrl{grid-area:ctrl}
+    #app{display:grid;grid-template-columns:min(46vw,330px) 1fr;grid-template-rows:auto auto auto auto auto 1fr;
+      grid-template-areas:"hd board" "cards board" "bubble board" "meters board" "cast board" "ctrl board";gap:5px 10px}
+    #hd{grid-area:hd}#cards{grid-area:cards}#bubble{grid-area:bubble}#meters{grid-area:meters}
+    #cast{grid-area:cast}#boardWrap{grid-area:board}#ctrl{grid-area:ctrl}
     #hd h1{font-size:min(4.4vw,22px)}
   }
 </style>
@@ -92,11 +133,12 @@
 <div id="app">
   <header id="hd">
     <h1>泥巴菜鸡<span class="vs">⚔</span>糖包</h1>
+    <div id="pun">泥巴菜鸡 ＝ 宁 波 财 经（谐音梗 · 懂的都懂）</div>
     <div id="record">糖包 <b>0</b> 胜 · 菜鸡 <b>0</b> 胜</div>
   </header>
   <div id="cards">
     <div class="card" id="cardMud">
-      <div class="ava">
+      <div class="ava" id="avaMud">
         <svg viewBox="0 0 64 64" aria-hidden="true">
           <ellipse cx="32" cy="42" rx="19" ry="17" fill="#ffd24a"/>
           <circle cx="32" cy="26" r="14" fill="#ffdd66"/>
@@ -109,31 +151,37 @@
           <path d="M14 18c3 0 5 2 5 5" stroke="#8a5a2c" stroke-width="2.4" fill="none" stroke-linecap="round"/>
           <circle cx="49" cy="15" r="4.4" fill="#7b5230" opacity=".8"/>
         </svg>
+        <span class="rc rc-sweat">💦</span><span class="rc rc-happy">🎉</span>
+        <span class="rc rc-panic">😱</span><span class="rc rc-dead">💀</span>
       </div>
-      <div class="meta"><b>泥巴菜鸡</b><span class="tag">你</span></div>
+      <div class="meta"><b>泥巴菜鸡</b><span class="tag">你 · 宁波财经</span></div>
     </div>
     <div class="card" id="cardSugar">
-      <div class="ava">
+      <div class="ava" id="avaSugar">
         <svg viewBox="0 0 64 64" aria-hidden="true">
           <path d="M22 11c2-3 5-3 7 0" stroke="#fff3dc" stroke-width="2" fill="none" opacity=".55" stroke-linecap="round"/>
           <path d="M35 8c2-3 5-3 7 0" stroke="#fff3dc" stroke-width="2" fill="none" opacity=".45" stroke-linecap="round"/>
           <ellipse cx="32" cy="39" rx="22" ry="19" fill="#fffaf0"/>
-          <ellipse cx="32" cy="39" rx="22" ry="19" fill="url(#bg2)"/>
           <path d="M32 20c-9 3-16 10-18 19M32 20c9 3 16 10 18 19M32 20v38M32 20c-5 6-8 13-9 20M32 20c5 6 8 13 9 20"
             stroke="#e3d3ba" stroke-width="1.6" fill="none" opacity=".9"/>
           <circle cx="32" cy="27" r="7" fill="#c8863c"/>
           <circle cx="29.6" cy="24.6" r="2.2" fill="#f0c48a" opacity=".8"/>
           <path d="M23 40l5 2M41 40l-5 2" stroke="#3a2a12" stroke-width="2.6" stroke-linecap="round"/>
           <circle cx="26" cy="37" r="2" fill="#2c1d0a"/><circle cx="38" cy="37" r="2" fill="#2c1d0a"/>
-          <defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#e6d8c0" stop-opacity=".2"/>
-          </linearGradient></defs>
         </svg>
+        <span class="rc rc-smug">😎</span><span class="rc rc-shock">❓</span>
+        <span class="rc rc-happy">👑</span><span class="rc rc-worry">🥵</span>
       </div>
-      <div class="meta"><b>糖包</b><span class="tag ai">超算 AI</span></div>
+      <div class="meta"><b>糖包</b><span class="tag ai">食堂二楼 · 超算</span></div>
     </div>
   </div>
   <div id="bubble"><b id="bubbleWho">糖包</b><span id="bubbleTxt">来啊，菜鸡。</span></div>
+  <div id="meters">
+    <span>泥巴度</span><div class="meter" id="meterMud"><i></i></div>
+    <span id="meterTxt">50 : 50</span><div class="meter" id="meterSugar"><i></i></div>
+    <span>糖分</span>
+  </div>
+  <div id="cast"><b>解说：</b>开局，糖包先手。</div>
   <div id="boardWrap">
     <canvas id="board"></canvas>
     <div id="think" class="hide"><i></i><span id="thinkTxt">糖包在算…</span></div>
@@ -658,6 +706,32 @@
     evalFor: function (p) { return evaluate(p); },
     rebuildNow: function () { rebuildAll(); },   // 自测用：强制全量重算，校验增量维护
     setDefWeight: function (w) { DEFW = w; },
+
+    /* 战术分析（复盘用）：当前局面下 me 的成五点 / 必挡点 / 最佳点 */
+    report: function (me) {
+      var opp = 3 - me;
+      var win = [], block = [], i, c, s1, s2, sc;
+      var bestMove = -1, bestScore = -1, myBest = -1, myBestScore = -1, oppBest = -1, oppBestScore = -1;
+      for (i = 0; i < candList.length; i++) {
+        c = candList[i];
+        s1 = pSc[c * 2 + me - 1]; s2 = pSc[c * 2 + opp - 1];
+        if (s1 >= S.FIVE) win.push(c);
+        if (s2 >= S.FIVE) block.push(c);
+        sc = s1 + s2 * 0.9;
+        if (sc > bestScore) { bestScore = sc; bestMove = c; }
+        if (s1 > myBestScore) { myBestScore = s1; myBest = c; }
+        if (s2 > oppBestScore) { oppBestScore = s2; oppBest = c; }
+      }
+      return {
+        win: win, block: block,
+        bestMove: bestMove, bestScore: bestScore,
+        myBest: myBest, myBestScore: myBestScore,
+        oppBest: oppBest, oppBestScore: oppBestScore,
+        cand: candList.length, empty: SZ - stones
+      };
+    },
+    scoreOf: function (cell, me) { return pSc[cell * 2 + me - 1] + pSc[cell * 2 + (3 - me) - 1] * 0.9; },
+    rc: function (cell) { return [(cell / N) | 0, cell % N]; },
     /* 调试用：列出根着法及其搜索结果（全窗口，慢，不受时间限制） */
     analyze: function (me, depth, topN) {
       deadline = Infinity;
@@ -685,32 +759,60 @@
   'use strict';
   var G = globalThis.GomokuEngine;
   G.init();
-  var N = G.N, SZ = N * N;
+  var N = G.N, SZ = N * N, S = G.S;
   var $ = function (id) { return document.getElementById(id); };
   var cv = $('board'), ctx = cv.getContext('2d');
   var AI_TIME = 1500;                       // 糖包每手思考预算（毫秒）
+  var POS = 'ABCDEFGHIJKLMNO';
+  function nm(cell) { return POS[cell % N] + ((cell / N) | 0); }
 
-  /* ---------- 状态 ---------- */
-  var humanP = 2, aiP = 1;                  // 默认糖包先手（1=先手/2=后手）
+  /* ---------- 对局状态 ---------- */
+  var humanP = 2, aiP = 1;                  // 默认糖包先手（1=先手 / 2=后手）
   var hist = [], snaps = [], undoLeft = 2;
   var over = false, thinking = false, lastMove = -1, winCells = null, winAt = 0;
   var popAt = {}, particles = [], hoverCell = -1, dirty = true;
+  var turnStart = 0, gameStart = 0;
   var record = loadRecord();
+  var stats = null;
 
-  /* ---------- 台词 ---------- */
+  /* ---------- 台词库 ---------- */
   var SUGAR_LINES = ['这步我算到二十层了，菜鸡。', '咦？你还会下这里？', '泥巴糊眼睛了吧。',
     '别急，我还没使劲。', '看好了，糖包包你。', '你这手，我笑了。', '再来一百局也一样。',
     '你下一步我都算完了。', '菜鸡的挣扎，真可爱。', '嗯…让我想想怎么赢得更好看。'];
   var SUGAR_KILL = ['这局我算完了，认输吧。', '五步之内，收工。', '已经结束了，你还没看出来？'];
+  var SUGAR_FOUR = ['冲四来了，你只能挡这儿。', '看好了，接下来你得跟着我走。', '四了，挡吧挡吧。'];
+  var SUGAR_BLOCK = ['挡住了，还有别的招吗？', '这条线到此为止，换一条吧。', '伸手就挡，别客气。', '嗯，我就知道你要走这儿。'];
+  var SUGAR_SHOCK = ['哟，这手还行啊。', '有点意思，谁教你的？', '菜鸡长本事了？', '嗯？我得重算一下。'];
+  var SUGAR_BORED = ['快点，糖快凉了。', '你再想想，反正也没用。', '要不你直接认输，省点电。'];
   var SUGAR_WIN = ['菜鸡就是菜鸡，糖包就是糖包。', '承让承让，泥巴我收下了。', '下一局？我还想再吃一只鸡。'];
   var MUD_LINES = ['看我这手！', '泥巴糊你一脸！', '我算过了，这步稳。', '糖包别得意！',
     '菜鸡也有春天！', '哼，让你见识泥巴的厉害。', '这步绝对没问题！', '我要赢了，真的！'];
+  var MUD_OOPS = ['啊这…手滑了。', '我刚才想的是另一步！', '不算不算，我重想。', '泥巴进眼睛了。', '这手是战术性失误！'];
+  var MUD_HMM = ['嗯…哪儿不太对。', '怎么有点心慌。', '糖包你别笑。'];
+  var MUD_GOOD = ['这手漂亮吧？', '嘿嘿，我算过的。', '泥巴也是有尊严的！'];
+  var MUD_DEAD = ['我怎么觉得要凉。', '糖包的眼神不对劲…', '完了完了完了。', '现在悔棋还来得及吗？'];
+  var MUD_WIN = ['我赢了我赢了我赢了！', '泥巴的胜利！', '菜鸡翻身了！'];
+  var CAST_QUIET = ['双方还在铺局面，泥巴暂时没糊眼。', '棋盘上很安静，糖包其实已经在算杀。',
+    '菜鸡落子很随意，解说替他捏把汗。', '糖包节奏很稳，一步一步收紧。'];
+  /* ---- 宁波财经彩蛋台词（泥巴菜鸡＝宁波财经谐音梗） ---- */
+  SUGAR_LINES.push('宁财的同学，就这水平？', '你们财经系不教五子棋的吗？', '这棋路，跟食堂的糖包一样糊。',
+    '早八起不来，棋也下不明白？', '期末了还输棋，绩点保重。', '毕设写完了吗就来下棋。');
+  SUGAR_BORED.push('同学，先去食堂吃个糖包冷静一下？', '你们宁财的棋风，我算是见识了。', '我这糖包是在食堂二楼进的货。');
+  SUGAR_KILL.push('教务处已在录入成绩：糖包 100，泥巴 59。', '同学，这局算你平时分不足。');
+  SUGAR_SHOCK.push('嗯？宁财还有这种操作？', '这手不像宁财的水平…你抄谁了？');
+  MUD_LINES.push('宁财的泥巴不是白当的！', '我绩点低，但我不认输！', '论文查重都过了，还怕你这手？',
+    '上课偷练的，别小看。', '食堂排队练出来的手速！', '挂科也不挂棋！');
+  MUD_OOPS.push('这手是替老师点的。', '导员，这局不算，我申请缓考。');
+  MUD_GOOD.push('宁财之光，闪一下！', '选修课《五子棋实战》没白上。', '我们专业课不行，五子棋可以。');
+  CAST_QUIET.push('解说：泥巴在复习，糖包在考试。', '解说：这就是宁财的教学成果吗…',
+    '解说：糖包已经在教务处占好座位了。', '解说：泥巴的手在抖，不知道是手冷还是心虚。');
+
   var lastPick = {};
   function pick(arr, key) {
+    if (!arr.length) return '';
     if (arr.length === 1) return arr[0];
-    var i, tries = 0;
-    do { i = Math.floor(Math.random() * arr.length); tries++; }
-    while (arr[i] === lastPick[key] && tries < 8);
+    var i, t = 0;
+    do { i = Math.floor(Math.random() * arr.length); t++; } while (arr[i] === lastPick[key] && t < 8);
     lastPick[key] = arr[i];
     return arr[i];
   }
@@ -719,33 +821,58 @@
     $('bubbleTxt').textContent = text;
     $('bubble').className = who;
   }
+  function castLine(html) { $('cast').innerHTML = '<b>解说：</b>' + html; }
+  function reaction(who, kind) {
+    var el = who === 'mud' ? $('avaMud') : $('avaSugar');
+    el.className = 'ava r-' + kind;
+    if (el._t) clearTimeout(el._t);
+    el._t = setTimeout(function () { el.className = 'ava'; }, kind === 'dead' ? 4000 : 1700);
+  }
 
   /* ---------- 音效 ---------- */
   var actx = null, sndOn = true;
-  function tone(f, d, type, vol, f2) {
-    if (!sndOn) return;
+  function ac() {
     try {
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
       if (actx.state === 'suspended') actx.resume();
-      var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    } catch (e) { actx = null; }
+    return actx;
+  }
+  function tone(f, d, type, vol, f2) {
+    if (!sndOn) return;
+    var a = ac(); if (!a) return;
+    try {
+      var o = a.createOscillator(), g = a.createGain(), t = a.currentTime;
       o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
       if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
       g.gain.setValueAtTime(vol || .12, t);
       g.gain.exponentialRampToValueAtTime(.0001, t + d);
-      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + d + .02);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + .02);
+    } catch (e) { }
+  }
+  function splat() {                                   // 泥巴"啪叽"
+    if (!sndOn) return;
+    var a = ac(); if (!a) return;
+    try {
+      var n = Math.floor(a.sampleRate * .09), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.4);
+      var src = a.createBufferSource(); src.buffer = buf;
+      var flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 900;
+      var g = a.createGain(); g.gain.value = .26;
+      src.connect(flt); flt.connect(g); g.connect(a.destination); src.start();
     } catch (e) { }
   }
   var sfx = {
-    place: function () { tone(430, .09, 'sine', .12, 250); },
+    place: function () { splat(); tone(430, .07, 'sine', .09, 250); },
     sugar: function () { tone(700, .1, 'triangle', .1, 900); },
     win: function () { [523, 659, 784, 1046].forEach(function (f, i) { setTimeout(function () { tone(f, .2, 'triangle', .12); }, i * 95); }); },
     lose: function () { [400, 320, 240, 180].forEach(function (f, i) { setTimeout(function () { tone(f, .26, 'sawtooth', .075); }, i * 140); }); },
     undo: function () { tone(320, .14, 'sine', .1, 170); }
   };
 
-  /* ---------- 战绩 ---------- */
+  /* ---------- 战绩存档 ---------- */
   function loadRecord() {
-    var d = { sugar: 0, chick: 0, draw: 0 };
+    var d = { sugar: 0, chick: 0, draw: 0, blunders: 0, games: 0 };
     try {
       var s = JSON.parse(localStorage.getItem('mudGomokuRecord') || 'null');
       if (s && typeof s.sugar === 'number') d = s;
@@ -756,10 +883,11 @@
   function showRecord() {
     var t = '糖包 <b>' + record.sugar + '</b> 胜 · 菜鸡 <b>' + record.chick + '</b> 胜';
     if (record.draw) t += ' · 平 <b>' + record.draw + '</b>';
+    if (record.blunders) t += ' · 生涯失误 <b>' + record.blunders + '</b>';
     $('record').innerHTML = t;
   }
 
-  /* ---------- 画布尺寸 / 素材 ---------- */
+  /* ---------- 画布素材 ---------- */
   var CSSSZ = 0, CELL = 0, PAD = 0, DPR = 1, bg = null, sprMud = null, sprSugar = null, SPR = 0;
   function pos(cell) { var r = (cell / N) | 0, c = cell % N; return { x: PAD + c * CELL, y: PAD + r * CELL }; }
   function mulberry32(a) {
@@ -780,7 +908,7 @@
     drawFn(x, half, half, r);
     return c;
   }
-  function drawMudSprite(c, cx, cy, r) {
+  function drawMudSprite(c, cx, cy, r) {      // 泥巴团子（里头是菜鸡）
     var g = c.createRadialGradient(cx - r * .35, cy - r * .42, r * .12, cx, cy, r * 1.08);
     g.addColorStop(0, '#bb9264'); g.addColorStop(.45, '#7d5430'); g.addColorStop(1, '#331d0d');
     c.beginPath(); c.arc(cx, cy, r, 0, 6.2832); c.fillStyle = g; c.fill();
@@ -800,7 +928,7 @@
     c.fillStyle = '#ffa930';
     c.beginPath(); c.moveTo(cx - r * .14, cy + r * .2); c.lineTo(cx + r * .14, cy + r * .2); c.lineTo(cx, cy + r * .5); c.closePath(); c.fill();
   }
-  function drawSugarSprite(c, cx, cy, r) {
+  function drawSugarSprite(c, cx, cy, r) {    // 糖包（白面包 + 红糖心）
     var g = c.createRadialGradient(cx - r * .34, cy - r * .4, r * .1, cx, cy, r * 1.04);
     g.addColorStop(0, '#ffffff'); g.addColorStop(.55, '#fbf4e6'); g.addColorStop(1, '#dccfb8');
     c.beginPath(); c.arc(cx, cy, r, 0, 6.2832); c.fillStyle = g; c.fill();
@@ -823,20 +951,20 @@
     bg.width = Math.ceil(CSSSZ * DPR); bg.height = Math.ceil(CSSSZ * DPR);
     var c = bg.getContext('2d');
     c.setTransform(DPR, 0, 0, DPR, 0, 0);
-    var S = CSSSZ, cell = CELL, pad = PAD, R = mulberry32(20250923), i;
-    var g = c.createLinearGradient(0, 0, S, S);
+    var Sz = CSSSZ, cell = CELL, pad = PAD, R = mulberry32(20250923), i;
+    var g = c.createLinearGradient(0, 0, Sz, Sz);
     g.addColorStop(0, '#dfba80'); g.addColorStop(.42, '#cda166'); g.addColorStop(1, '#ae8050');
-    c.fillStyle = g; c.fillRect(0, 0, S, S);
-    for (i = 0; i < 30; i++) {                       // 泥斑
-      var x = R() * S, y = R() * S, rr = (.05 + R() * .17) * S;
+    c.fillStyle = g; c.fillRect(0, 0, Sz, Sz);
+    for (i = 0; i < 30; i++) {
+      var x = R() * Sz, y = R() * Sz, rr = (.05 + R() * .17) * Sz;
       c.globalAlpha = .05 + R() * .07;
       c.fillStyle = R() < .55 ? '#8a5a2c' : '#efd7a6';
       c.beginPath(); c.ellipse(x, y, rr, rr * (.55 + R() * .8), R() * 3.14, 0, 6.2832); c.fill();
     }
     c.globalAlpha = 1;
-    var vg = c.createRadialGradient(S / 2, S / 2, S * .18, S / 2, S / 2, S * .78);
+    var vg = c.createRadialGradient(Sz / 2, Sz / 2, Sz * .18, Sz / 2, Sz / 2, Sz * .78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(66,38,14,.34)');
-    c.fillStyle = vg; c.fillRect(0, 0, S, S);
+    c.fillStyle = vg; c.fillRect(0, 0, Sz, Sz);
     c.strokeStyle = 'rgba(86,52,22,.7)'; c.lineWidth = Math.max(1, cell * .04);
     for (i = 0; i < N; i++) {
       var p = pad + i * cell;
@@ -854,7 +982,7 @@
     var wrap = $('boardWrap');
     var w = wrap.clientWidth, h = wrap.clientHeight;
     if (w < 40 || h < 40) return;
-    var s = Math.max(190, Math.floor(Math.min(w, h)) - 2);
+    var s = Math.max(180, Math.floor(Math.min(w, h)) - 2);
     CSSSZ = s; CELL = s / (N + 1); PAD = CELL;
     DPR = Math.min(3, window.devicePixelRatio || 1);
     cv.style.width = s + 'px'; cv.style.height = s + 'px';
@@ -867,18 +995,43 @@
 
   /* ---------- 绘制 ---------- */
   function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function drawStains() {                    // 失误处留泥渍，糖包杀招处留糖晶
+    if (!stats) return;
+    var i, k, s2, pt, a, d, r, R, gr;
+    for (i = 0; i < stats.stains.length; i++) {
+      s2 = stats.stains[i]; pt = pos(s2.cell); R = mulberry32(s2.cell * 7919 + 13);
+      if (s2.kind === 'mud') {
+        ctx.globalAlpha = .27; ctx.fillStyle = '#5a3a1c';
+        for (k = 0; k < 6; k++) {
+          a = R() * 6.2832; d = R() * CELL * .34; r = CELL * (.08 + R() * .13);
+          ctx.beginPath(); ctx.arc(pt.x + Math.cos(a) * d, pt.y + Math.sin(a) * d, r, 0, 6.2832); ctx.fill();
+        }
+      } else {
+        ctx.globalAlpha = .5; ctx.strokeStyle = '#fff8e2'; ctx.lineWidth = Math.max(1, CELL * .055);
+        for (k = 0; k < 4; k++) {
+          a = k * 1.5708 + .5; d = CELL * .36;
+          ctx.beginPath();
+          ctx.moveTo(pt.x - Math.cos(a) * d, pt.y - Math.sin(a) * d);
+          ctx.lineTo(pt.x + Math.cos(a) * d, pt.y + Math.sin(a) * d);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
   function draw() {
     if (!CSSSZ || !bg) return;
     ctx.clearRect(0, 0, CSSSZ, CSSSZ);
     ctx.drawImage(bg, 0, 0, CSSSZ, CSSSZ);
+    drawStains();
     var now = performance.now(), bd = G.board(), i, p, pt;
-    if (lastMove >= 0 && bd[lastMove]) {          // 最后一手标记
+    if (lastMove >= 0 && bd[lastMove]) {
       pt = pos(lastMove);
       ctx.beginPath(); ctx.arc(pt.x, pt.y, CELL * .49, 0, 6.2832);
       ctx.strokeStyle = bd[lastMove] === aiP ? 'rgba(255,196,92,.9)' : 'rgba(255,120,80,.9)';
       ctx.lineWidth = Math.max(1.4, CELL * .075); ctx.stroke();
     }
-    for (i = 0; i < SZ; i++) {                    // 棋子
+    for (i = 0; i < SZ; i++) {
       p = bd[i]; if (!p) continue;
       pt = pos(i);
       var sc = 1, t = popAt[i];
@@ -892,19 +1045,19 @@
     }
     if (winCells) {
       var k2 = Math.min(1, (now - winAt) / 500), pulse = .55 + .45 * Math.sin(now / 220);
-      var a = winCells[0], b = winCells[winCells.length - 1], pa = pos(a), pb = pos(b);
+      var pa = pos(winCells[0]), pb = pos(winCells[winCells.length - 1]);
       ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
       ctx.lineCap = 'round';
       ctx.strokeStyle = 'rgba(255,214,110,' + (.35 + .3 * pulse) + ')';
       ctx.lineWidth = CELL * (.22 + .07 * pulse); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,246,200,' + (.5 + .4 * pulse) + ')';
       ctx.lineWidth = CELL * .1; ctx.stroke();
-      winCells.forEach(function (c2, j) {
+      winCells.forEach(function (c2) {
         var pc = pos(c2), sc2 = 1 + .18 * pulse;
         ctx.globalAlpha = .5 * k2;
-        var spr2 = ctx.createRadialGradient(pc.x, pc.y, 0, pc.x, pc.y, CELL * .7 * sc2);
-        spr2.addColorStop(0, 'rgba(255,235,150,.85)'); spr2.addColorStop(1, 'rgba(255,200,80,0)');
-        ctx.fillStyle = spr2;
+        var gr = ctx.createRadialGradient(pc.x, pc.y, 0, pc.x, pc.y, CELL * .7 * sc2);
+        gr.addColorStop(0, 'rgba(255,235,150,.85)'); gr.addColorStop(1, 'rgba(255,200,80,0)');
+        ctx.fillStyle = gr;
         ctx.beginPath(); ctx.arc(pc.x, pc.y, CELL * .7 * sc2, 0, 6.2832); ctx.fill();
         ctx.globalAlpha = 1;
       });
@@ -916,7 +1069,7 @@
       ctx.drawImage(sprMud, ph.x - SPR / 2, ph.y - SPR / 2, SPR, SPR);
       ctx.globalAlpha = 1;
     }
-    for (i = 0; i < particles.length; i++) {       // 泥点 / 糖粒
+    for (i = 0; i < particles.length; i++) {
       var q = particles[i];
       ctx.globalAlpha = Math.max(0, q.life) * .85;
       ctx.fillStyle = q.c;
@@ -951,8 +1104,170 @@
     if (busy) { stepParticles(); draw(); dirty = false; }
     else if (dirty) { dirty = false; draw(); }
   }
-  /* 状态一变就同步重绘一次：不依赖动画帧（切后台时 rAF 会被浏览器暂停） */
+  /* 状态一变就同步重绘：不依赖动画帧（切后台时浏览器会暂停 rAF） */
   function render() { dirty = false; draw(); }
+
+  /* ---------- 战术统计 ---------- */
+  function resetStats() {
+    stats = {
+      mud: {
+        moves: 0, ms: 0, five: 0, four: 0, openFour: 0, three: 0, blockFour: 0, blockThree: 0,
+        quiet: 0, blunder: 0, inacc: 0, best: 0, missWin: 0, topCell: -1, topScore: -1, topPly: 0
+      },
+      sugar: {
+        moves: 0, ms: 0, nodes: 0, maxDepth: 0, five: 0, four: 0, openFour: 0, three: 0,
+        blockFour: 0, blockThree: 0, quiet: 0, verdictPly: 0, verdictCell: -1,
+        topCell: -1, topScore: -1, topPly: 0
+      },
+      mistakes: [], stains: []
+    };
+  }
+  /* 落子前判断这一手的性质 */
+  function judge(cell, p) {
+    var opp = 3 - p, r = G.report(p);
+    var s1 = G.cellScore(cell, p), s2 = G.cellScore(cell, opp);
+    var played = s1 + s2 * 0.9, best = r.bestScore;
+    var kind = 'quiet';
+    if (s1 >= S.FIVE) kind = 'five';
+    else if (s1 >= S.OPEN_FOUR) kind = 'openFour';
+    else if (s1 >= S.FOUR) kind = 'four';
+    else if (s1 >= S.OPEN_THREE) kind = 'three';
+    else if (s2 >= S.FOUR) kind = 'blockFour';
+    else if (s2 >= S.OPEN_THREE) kind = 'blockThree';
+    return {
+      kind: kind, my: s1, opp: s2, played: played, best: best, bestMove: r.bestMove,
+      loss: best - played, winCells: r.win, blockCells: r.block,
+      missedWin: r.win.length > 0 && r.win.indexOf(cell) < 0,
+      missedBlock: r.win.length === 0 && r.block.length > 0 && r.block.indexOf(cell) < 0,
+      oppBest: r.oppBestScore
+    };
+  }
+  function tagOf(j) {
+    if (j.missedWin) return '漏胜';
+    if (j.missedBlock) return '漏挡（对手冲四没管）';
+    if (j.kind === 'five') return '成五';
+    if (j.kind === 'openFour') return '活四';
+    if (j.kind === 'four') return '冲四';
+    if (j.kind === 'three') return '活三';
+    if (j.kind === 'blockFour') return '挡冲四';
+    if (j.kind === 'blockThree') return '挡活三';
+    if (j.loss > 45000) return '大漏着';
+    if (j.loss > 15000) return '失着';
+    if (j.loss > 4000) return '缓手';
+    return '闲手';
+  }
+  function recordMove(who, cell, j, ply) {
+    var st = stats[who], tag = tagOf(j);
+    st.moves++;
+    if (j.kind === 'five') st.five++;
+    else if (j.kind === 'openFour') st.openFour++;
+    else if (j.kind === 'four') st.four++;
+    else if (j.kind === 'three') st.three++;
+    else if (j.kind === 'blockFour') st.blockFour++;
+    else if (j.kind === 'blockThree') st.blockThree++;
+    else st.quiet++;
+    if (j.played > st.topScore) { st.topScore = j.played; st.topCell = cell; st.topPly = ply; }
+    if (who !== 'mud') return;
+    var bad = j.missedWin || j.missedBlock || j.loss > 45000;
+    if (bad) {
+      st.blunder++;
+      stats.mistakes.push({
+        ply: ply, cell: cell, tag: tagOf(j), loss: Math.round(j.loss),
+        suggest: j.missedWin && j.winCells.length ? j.winCells[0] : j.bestMove
+      });
+      stats.stains.push({ cell: cell, kind: 'mud' });
+      reaction('mud', 'panic');
+      castLine('这一手 <b>' + nm(cell) + '</b> —— ' + tag + '，教务处看了都摇头。');
+    } else if (j.loss > 15000) {
+      st.inacc++;
+      castLine('菜鸡这手略亏，糖包白赚一步。');
+    } else if (j.played >= j.best - 1) {
+      st.best++;
+      castLine('正着！这步跟引擎想的一样，解说鼓掌。');
+    }
+  }
+  function updateMeters() {
+    var e = G.evalFor(humanP);
+    var pct = 50 + Math.atan(e / 300000) * 31.8;
+    pct = Math.max(6, Math.min(94, pct));
+    $('meterMud').firstChild.style.width = pct.toFixed(0) + '%';
+    $('meterSugar').firstChild.style.width = (100 - pct).toFixed(0) + '%';
+    var st = pct < 12 ? ' · 挂科预警' : pct < 28 ? ' · 绩点告急' : pct < 45 ? ' · 有点吃力' : pct > 62 ? ' · 泥巴有戏' : '';
+    $('meterTxt').textContent = Math.round(pct) + ' : ' + Math.round(100 - pct) + st;
+  }
+  function gradeOf(m) {
+    var b = m.blunder, made = m.four + m.openFour + m.three + m.five;
+    if (b === 0 && made >= 3) return { g: 'S', gpa: '4.0', t: '宁财泥巴学神（一堂课没翘，一手没错）', c: '#ffd166' };
+    if (b <= 1 && made >= 2) return { g: 'A', gpa: '3.7', t: '泥巴学霸（手上真有点活）', c: '#c8e08a' };
+    if (b <= 2) return { g: 'B', gpa: '3.0', t: '老学长（及格线以上，混得还行）', c: '#9fd6e8' };
+    if (b <= 4) return { g: 'C', gpa: '2.0', t: '摸鱼人（绩点已进入危险区）', c: '#e8c39f' };
+    return { g: 'D', gpa: '1.0', t: '挂科预警（糖包已把成绩单发到辅导员）', c: '#e89f9f' };
+  }
+  /* 教务处点评 */
+  function campusRemark(m, winner) {
+    if (winner === 1 && m.blunder === 0) return '本场无违规，可申请「五子棋专项」奖学金';
+    if (m.blunder === 0) return '本场没有大漏着，可以申请奖学金（五子棋专项）';
+    if (m.blunder <= 2) return '表现尚可，建议多去图书馆占座';
+    if (m.blunder <= 4) return '基础不牢，建议重修《五子棋导论》';
+    return '已登记挂科，请于下周一携带学生卡到教务处报到';
+  }
+  function sec(title, body) { return '<div class="sec"><h3>' + title + '</h3>' + body + '</div>'; }
+  function row3(k, a, b) { return '<tr><td class="k">' + k + '</td><td class="m">' + a + '</td><td class="s">' + b + '</td></tr>'; }
+  function buildReport(winner) {
+    var m = stats.mud, sg = stats.sugar, h = '';
+    var who = winner === aiP ? '糖包' : winner === humanP ? '泥巴菜鸡' : '';
+    var how = winner === aiP ? 'KO' : winner === humanP ? '被菜鸡翻盘' : '平局';
+    var mudAvg = m.moves ? m.ms / m.moves : 0, sugAvg = sg.moves ? sg.ms / sg.moves : 0;
+    h += '<div class="warbox">' +
+      '<b>战报：</b>' + (winner ? who + ' 用 ' + hist.length + ' 手 ' + how + '。' : '本局 ' + hist.length + ' 手，未分胜负。') +
+      '<br><b>糖包算力：</b>搜索 ' + (sg.nodes / 1000).toFixed(1) + ' 千个局面，最深 ' + sg.maxDepth + ' 层，共想 ' +
+      (sg.ms / 1000).toFixed(1) + ' 秒' +
+      (sg.verdictPly ? '，<b>第 ' + sg.verdictPly + ' 手就判定必胜</b>（' + nm(sg.verdictCell) + '）' : '') + '。' +
+      '<br><b>手速对比：</b>你平均每手 ' + (mudAvg / 1000).toFixed(1) + ' 秒，糖包平均 ' + (sugAvg / 1000).toFixed(2) + ' 秒' +
+      (mudAvg && sugAvg ? '（它比你快 <b>' + Math.max(1, Math.round(mudAvg / Math.max(1, sugAvg))) + '</b> 倍）' : '') + '。<br>' +
+      '<b>糖包档案：</b>食堂二楼糖包一只，被教务处塞了超算芯片，专治宁财菜鸡，至今零败。' +
+      '</div>';
+    var gr = gradeOf(m);
+    h += sec('泥巴成绩单（宁财版）',
+      '<div class="big">本局绩点 <span class="grade" style="color:' + gr.c + '">' + gr.gpa + '</span>（' + gr.g + ' 级）· ' + gr.t + '</div>' +
+      '<div class="tip" style="text-align:left;margin-top:5px">漏胜（送分题 ' + m.missWin + ' 道） · ' +
+      '漏挡/大漏着（挂科 ' + m.blunder + ' 门） · 正着（满分 ' + m.best + ' 手） · ' +
+      '生涯累计失误 ' + record.blunders + ' 次（共 ' + record.games + ' 局）<br>' +
+      '教务处点评：' + campusRemark(m, winner) + '。</div>');
+    h += sec('战术统计', '<table class="st">' +
+      '<tr><th></th><th>泥巴菜鸡</th><th>糖包</th></tr>' +
+      row3('落子手数', m.moves, sg.moves) +
+      row3('活三', m.three, sg.three) +
+      row3('冲四 / 挡冲四', m.four + ' / ' + m.blockFour, sg.four + ' / ' + sg.blockFour) +
+      row3('活四 / 成五', m.openFour + ' / ' + m.five, sg.openFour + ' / ' + sg.five) +
+      row3('挡活三', m.blockThree, sg.blockThree) +
+      row3('闲手', m.quiet, sg.quiet) +
+      row3('挂科 / 满分', m.blunder + ' / ' + m.best, '0 / —') +
+      row3('最高评分', m.topCell >= 0 ? nm(m.topCell) + ' (' + Math.round(m.topScore) + ')' : '—',
+        sg.topCell >= 0 ? nm(sg.topCell) + ' (' + Math.round(sg.topScore) + ')' : '—') +
+      '</table>');
+    if (stats.mistakes.length) {
+      var li = '';
+      stats.mistakes.slice(0, 5).forEach(function (k) {
+        li += '<li>第 <b>' + k.ply + '</b> 手 <b>' + nm(k.cell) + '</b> —— ' + k.tag +
+          (k.suggest >= 0 && k.suggest !== k.cell ? '，其实该下 <i>' + nm(k.suggest) + '</i>' : '') + '</li>';
+      });
+      h += sec('补考清单（前 5 门，错的都是送分题）', '<ul class="mist">' + li + '</ul>');
+    } else {
+      h += sec('补考清单', '<div class="tip" style="text-align:left">零挂科！糖包表示有点意外，教务处也有点意外。</div>');
+    }
+    if (sg.verdictPly) {
+      h += sec('糖包的高光时刻（教务系统：糖包 100 分）',
+        '<div class="tip" style="text-align:left">第 <b style="color:#ffcf7a">' + sg.verdictPly + '</b> 手落在 <b style="color:#ffcf7a">' +
+        nm(sg.verdictCell) + '</b> 之后，它已经算出必胜路线 —— 那时候它就知道你输了。</div>');
+    }
+    if (m.topCell >= 0) {
+      h += sec('你的满分那一手（本局唯一亮点）', '<div class="tip" style="text-align:left">第 <b style="color:#ffcf7a">' + m.topPly +
+        '</b> 手 <b style="color:#ffcf7a">' + nm(m.topCell) + '</b>（评分 ' + Math.round(m.topScore) +
+        '）—— 宁财泥巴也有闪光时刻。</div>');
+    }
+    return h;
+  }
 
   /* ---------- 交互 ---------- */
   function hit(ev) {
@@ -985,13 +1300,17 @@
     hist = []; snaps = [G.snapshot()];
     undoLeft = 2; over = false; thinking = false; lastMove = -1; winCells = null;
     popAt = {}; particles = []; hoverCell = -1;
+    resetStats();
     humanP = aiFirst ? 2 : 1; aiP = 3 - humanP;
+    $('avaMud').className = 'ava'; $('avaSugar').className = 'ava';
     $('ovl').classList.add('hide');
     $('think').classList.add('hide');
     showRecord(); updateCtrl();
-    markTurn();
+    turnStart = gameStart = performance.now();
+    markTurn(); updateMeters();
     turn();
     say(aiFirst ? 'sugar' : 'mud', aiFirst ? pick(SUGAR_LINES, 's') : pick(MUD_LINES, 'm'));
+    castLine(aiFirst ? '糖包天元开局，菜鸡请接招。' : '菜鸡先手，解说：勇气可嘉。');
     render();
   }
   function markTurn() {
@@ -1002,14 +1321,13 @@
   function updateCtrl() {
     $('undoLeft').textContent = undoLeft;
     $('btnUndo').disabled = over || thinking || undoLeft <= 0;
-    $('btnNew').disabled = false;
     $('btnSwap').disabled = thinking;
   }
   function turn() {
     markTurn();
     if (over) return;
     if (turnP() === aiP) aiPlay();
-    else { $('bubbleTxt').textContent = '该你了，落子吧。'; $('bubble').className = 'mud'; }
+    else { turnStart = performance.now(); say('mud', '该你了，落子吧。'); }
   }
   function commit(cell, p) {
     if (!G.play(cell, p)) return false;
@@ -1020,12 +1338,22 @@
     return true;
   }
   function humanMove(cell) {
+    var j = judge(cell, humanP);
+    stats.mud.ms += performance.now() - turnStart;
+    recordMove('mud', cell, j, hist.length + 1);
     if (!commit(cell, humanP)) return;
     sfx.place();
+    updateMeters();
     var line = G.winLine(cell, humanP);
     if (line) { endGame(humanP, line); return; }
     if (hist.length >= SZ) { endGame(0, null); return; }
-    say('mud', pick(MUD_LINES, 'm'));
+    /* 糖包的反应：菜鸡下手狠了会吓一跳 */
+    var r2 = G.report(aiP);
+    if (r2.win.length || (j.kind !== 'quiet' && j.kind !== 'blockThree' && j.my >= S.OPEN_THREE)) {
+      reaction('sugar', 'shock'); say('sugar', pick(SUGAR_SHOCK, 'sh'));
+    } else if (j.played >= j.best - 1 && stats.mud.best % 3 === 0) {
+      say('mud', pick(MUD_GOOD, 'good'));
+    }
     updateCtrl();
     turn();
   }
@@ -1037,21 +1365,35 @@
       var r;
       try { r = G.think(aiP, AI_TIME); }
       catch (e) {
-        // 极端情况下退化为"第一个候选点"
         var cand = G.candidates();
         r = { move: cand.length ? cand[0] : 112, depth: 0, nodes: 0, ms: 0, score: 0 };
       }
+      var mv = r.move >= 0 ? r.move : 112;
+      var jj = judge(mv, aiP);
       thinking = false;
       $('think').classList.add('hide');
-      var mv = r.move;
-      if (mv < 0) mv = 112;
+      stats.sugar.nodes += r.nodes || 0;
+      stats.sugar.ms += r.ms || 0;
+      if (r.depth > stats.sugar.maxDepth) stats.sugar.maxDepth = r.depth;
+      var ply = hist.length + 1;
+      var firstVerdict = r.win && !stats.sugar.verdictPly;
+      if (firstVerdict) { stats.sugar.verdictPly = ply; stats.sugar.verdictCell = mv; }
+      recordMove('sugar', mv, jj, ply);
       if (!G.board()[mv]) commit(mv, aiP);
       sfx.sugar();
-      updateCtrl();
+      updateMeters(); updateCtrl();
       var line = G.winLine(mv, aiP);
       if (line) { endGame(aiP, line); return; }
       if (hist.length >= SZ) { endGame(0, null); return; }
-      say('sugar', r.win ? pick(SUGAR_KILL, 'k') : pick(SUGAR_LINES, 's'));
+      if (r.win) {
+        reaction('sugar', 'happy'); reaction('mud', 'panic'); say('sugar', pick(SUGAR_KILL, 'k'));
+        if (firstVerdict) castLine('教务系统已录入：糖包 <b>100</b> 分，泥巴 <b>59</b> 分（差一分及格）。');
+      }
+      else if (jj.kind === 'four' || jj.kind === 'openFour') { reaction('mud', 'sweat'); say('sugar', pick(SUGAR_FOUR, 'f')); }
+      else if (jj.kind === 'blockFour' || jj.kind === 'blockThree') say('sugar', pick(SUGAR_BLOCK, 'bl'));
+      else if (G.evalFor(humanP) < -120000) { reaction('sugar', 'smug'); say('sugar', pick(SUGAR_BORED, 'bo')); }
+      else say('sugar', pick(SUGAR_LINES, 's'));
+      if (G.evalFor(humanP) < -400000) reaction('mud', 'sweat');
       render();
       turn();
     }, 60);
@@ -1069,58 +1411,59 @@
     over = false; winCells = null;
     lastMove = k > 0 ? hist[k - 1].i : -1;
     popAt = {}; particles = []; hoverCell = -1;
+    if (stats.stains.length) stats.stains.pop();
     sfx.undo();
-    updateCtrl();
+    updateCtrl(); updateMeters();
     turn();
     say('mud', '这手不算，我重下！');
+    castLine('悔棋 ×1 —— 泥巴可以糊第二次。');
     render();
   }
   function endGame(winner, line) {
     over = true; thinking = false; winCells = line; winAt = performance.now();
     $('think').classList.add('hide');
-    var dur = 0, x = (performance.now() - hist.length * 0);
-    if (winner === aiP) { record.sugar++; sfx.lose(); }
+    if (winner === aiP) { record.sugar++; record.blunders += stats.mud.blunder; sfx.lose(); }
     else if (winner === humanP) { record.chick++; sfx.win(); }
     else { record.draw++; sfx.undo(); }
+    record.games = (record.games || 0) + 1;
     saveRecord(); showRecord(); updateCtrl(); markTurn();
+    if (winner === aiP) { reaction('sugar', 'happy'); reaction('mud', 'dead'); }
+    else if (winner === humanP) { reaction('mud', 'happy'); reaction('sugar', 'shock'); say('mud', pick(MUD_WIN, 'w')); }
     render();
-    setTimeout(function () { showResult(winner); }, line ? 1500 : 400);
+    setTimeout(function () { showResult(winner); }, line ? 1600 : 400);
   }
   function showResult(winner) {
-    var h = '';
-    if (winner === aiP) {
-      h = '<h2>糖包赢了 🍬</h2><div class="sub">' + pick(SUGAR_WIN, 'w') + '</div>' +
-        '<p>本局 <span class="hi">' + hist.length + '</span> 手。糖包总战绩：<span class="hi">' +
-        record.sugar + '</span> 胜。</p>';
-    } else if (winner === humanP) {
-      h = '<h2>不可能…你赢了？！</h2><div class="sub">糖包：一定是手机卡了。</div>' +
-        '<p>恭喜！本局 <span class="hi">' + hist.length + '</span> 手。这个战绩会被记下来。</p>';
-    } else {
-      h = '<h2>平局</h2><div class="sub">泥巴和糖糊成一团了。</div><p>再打一局分个高低。</p>';
-    }
-    h += '<div class="row">' +
+    var head = winner === aiP ? '<h2>糖包赢了 🍬</h2><div class="sub">成绩单已出：' + pick(SUGAR_WIN, 'w') + '</div>'
+      : winner === humanP ? '<h2>不可能…你赢了？！</h2><div class="sub">糖包：一定是手机卡了。</div>'
+        : '<h2>平局</h2><div class="sub">泥巴和糖糊成一团了。</div>';
+    $('panel').innerHTML = head +
+      '<div class="row">' +
       '<button id="againAi">再来一局（糖包先走）</button>' +
       '<button id="againMe" class="ghost">再来一局（我先走）</button>' +
-      '<button id="againSame" class="ghost">看这盘棋（慢着）</button></div>' +
-      '<div class="tip">提示：你有 2 次悔棋机会，只能悔自己的棋。</div>';
-    $('panel').innerHTML = h;
+      '<button id="againSame" class="ghost">先看看这盘棋</button>' +
+      '</div>' + buildReport(winner) +
+      '<div class="tip">绩点看的是「漏挡 / 漏胜 / 大漏着」；棋盘上的泥渍就是你的挂科痕迹（笑）。<br>' +      '每局 2 次悔棋，只能悔自己的棋。</div>';
     $('ovl').classList.remove('hide');
     $('againAi').onclick = function () { newGame(true); };
     $('againMe').onclick = function () { newGame(false); };
     $('againSame').onclick = function () { $('ovl').classList.add('hide'); };
+    $('panel').scrollTop = 0;
   }
   function showStart() {
-    var h = '<h2>泥巴菜鸡 ⚔ 糖包</h2>' +
-      '<div class="sub">15×15 五子连珠 · 手机直接玩</div>' +
-      '<p>糖包是泥巴味超算：<span class="hi">六层以上算路 + 连续冲四杀棋</span>，' +
-      '建成双活三、四三杀就一口吃掉你。放水？不存在的。</p>' +
+    $('panel').innerHTML = '<h2>泥巴菜鸡 ⚔ 糖包</h2>' +
+      '<div class="sub">15×15 五子连珠 · 宁波财经谐音梗 · 赛后出成绩单</div>' +
+      '<p><span class="hi">泥巴菜鸡</span>＝<span class="hi">宁波财经</span>（谐音梗）：在读，也在挨打；' +
+      '专业课没学明白，五子棋也没学明白。<br>' +
+      '<span class="hi">糖包</span>＝食堂二楼三块五一个的糖包，被教务处偷偷塞了超算芯片，' +
+      '现在专治菜鸡：<span class="hi">六层以上算路 + 连续冲四杀棋</span>，建成双活三、四三杀就一口吃掉你。放水？不存在的。</p>' +
       '<p class="big">选谁先走：</p>' +
       '<div class="row">' +
       '<button id="stAi">糖包先走（推荐 · 你更没机会）</button>' +
-      '<button id="stMe" class="ghost">我先走（菜鸡也要面子）</button>' +
+      '<button id="stMe" class="ghost">我先走（泥巴也要面子）</button>' +
       '</div>' +
-      '<div class="tip">你有 2 次悔棋机会，只能悔自己的棋。<br>想赢糖包？目前全网还没有人做到。</div>';
-    $('panel').innerHTML = h;
+      '<p>下完给你出一份 <span class="hi">成绩单</span>：绩点评级、补考清单、漏挡漏胜、活三冲四各几手、' +
+      '糖包第几手判定必胜 —— 数据糊脸，别不服。</p>' +
+      '<div class="tip">2 次悔棋机会，只能悔自己的棋。<br>想赢糖包？宁财全校都还没人做到（它自己说的）。</div>';
     $('ovl').classList.remove('hide');
     $('stAi').onclick = function () { newGame(true); };
     $('stMe').onclick = function () { newGame(false); };
@@ -1133,13 +1476,14 @@
   $('btnSound').onclick = function () {
     sndOn = !sndOn;
     $('btnSound').textContent = sndOn ? '🔊' : '🔇';
-    if (sndOn) sfx.place();
+    if (sndOn) sfx.sugar();
   };
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', function () { setTimeout(layout, 260); });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   document.addEventListener('dblclick', function (e) { e.preventDefault(); });
 
+  resetStats();
   layout();
   showRecord();
   updateCtrl();
