@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2b1a0e">
+<meta name="description" content="泥巴菜鸡战糖包 · 手机上玩的五子棋，糖包超算零败">
+<title>泥巴菜鸡战糖包 · 五子棋</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#180f07;
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none;
+    color:#f3e3cb}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;gap:6px;
+    padding:calc(8px + env(safe-area-inset-top)) 10px calc(9px + env(safe-area-inset-bottom));
+    background:
+      radial-gradient(85% 55% at 50% -8%,rgba(146,104,60,.95) 0%,rgba(146,104,60,0) 62%),
+      radial-gradient(120% 80% at 50% 112%,rgba(24,14,5,.95) 0%,rgba(24,14,5,0) 58%),
+      linear-gradient(180deg,#5c3f26 0%,#33200f 55%,#1a1007 100%)}
+  /* 背景泥点 */
+  .splat{position:absolute;border-radius:50%;pointer-events:none;filter:blur(7px);opacity:.3}
+  #hd{position:relative;text-align:center}
+  #hd h1{margin:0;font-size:min(6.6vw,25px);letter-spacing:1px;color:#ffdfae;
+    text-shadow:0 2px 0 #3a2210,0 0 14px rgba(255,186,88,.32)}
+  #hd h1 .vs{color:#ffb347;font-size:.72em;margin:0 5px}
+  #record{font-size:11.5px;color:#c9ab84;margin-top:3px;letter-spacing:.4px}
+  #record b{color:#ffd07a}
+  #cards{display:flex;gap:8px}
+  .card{flex:1;display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:15px;min-width:0;
+    background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.22));
+    border:1.5px solid rgba(255,214,160,.13);transition:border-color .25s,box-shadow .25s,background .25s}
+  .card.on{border-color:#ffc65c;background:linear-gradient(180deg,rgba(255,198,92,.16),rgba(0,0,0,.24));
+    box-shadow:0 0 0 1px rgba(255,198,92,.3),0 0 18px rgba(255,170,60,.25)}
+  .card .ava{width:38px;height:38px;flex:0 0 38px}
+  .card .ava svg{width:100%;height:100%;display:block}
+  .card .meta{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .card .meta b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .tag{font-size:9.5px;padding:1px 6px;border-radius:8px;align-self:flex-start;
+    background:rgba(0,0,0,.32);color:#f0d9b5;letter-spacing:.5px}
+  .card .tag.ai{background:rgba(255,190,80,.22);color:#ffd88f}
+  #bubble{display:flex;gap:6px;padding:7px 10px;border-radius:12px;min-height:36px;align-items:center;
+    background:rgba(0,0,0,.26);border:1px solid rgba(255,255,255,.06);font-size:12.5px;line-height:1.35;color:#eeddc2}
+  #bubble b{flex:none;color:#ffcf7a}
+  #bubble.sugar b{color:#ffe3a8}
+  #bubble.mud b{color:#e8b884}
+  #boardWrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+  #board{touch-action:none;display:block;border-radius:16px;
+    box-shadow:0 12px 28px rgba(0,0,0,.55),0 0 0 3px rgba(255,214,160,.16)}
+  #think{position:absolute;left:50%;bottom:7px;transform:translateX(-50%);display:flex;gap:6px;
+    align-items:center;padding:5px 13px;border-radius:999px;font-size:11.5px;color:#ffd493;
+    background:rgba(20,12,5,.85);border:1px solid rgba(255,205,120,.32);white-space:nowrap}
+  #think.hide{display:none}
+  #think i{width:10px;height:10px;border-radius:50%;border:2px solid #ffcf7a;border-top-color:transparent;
+    animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #ctrl{display:flex;gap:8px}
+  #ctrl button{flex:1;padding:11px 4px;border-radius:14px;font-size:13.5px;font-weight:700;font-family:inherit;
+    color:#ffeacb;background:linear-gradient(180deg,#7c5230,#472c16);
+    border:1.5px solid rgba(255,206,140,.32);box-shadow:0 3px 0 #24160a,0 6px 14px rgba(0,0,0,.3)}
+  #ctrl button:active{transform:translateY(2px);box-shadow:0 1px 0 #24160a}
+  #ctrl button:disabled{opacity:.42;filter:grayscale(.6)}
+  #ctrl button em{font-style:normal;color:#ffd166}
+  #ctrl #btnSound{flex:0 0 46px;font-size:16px}
+  #ovl{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;
+    background:radial-gradient(65% 55% at 50% 42%,rgba(74,48,22,.9),rgba(10,6,2,.95))}
+  #ovl.hide{display:none}
+  #panel{width:min(92vw,392px);max-height:88vh;overflow:auto;text-align:center;border-radius:20px;padding:18px 18px 20px;
+    background:linear-gradient(180deg,#4d3219,#28180b);border:2px solid rgba(255,199,120,.38);
+    box-shadow:0 22px 50px rgba(0,0,0,.6),inset 0 0 40px rgba(0,0,0,.35)}
+  #panel h2{margin:0 0 4px;font-size:21px;color:#ffd79a;letter-spacing:1px;text-shadow:0 2px 0 #2a1708}
+  #panel .sub{font-size:12px;color:#c8ab86;letter-spacing:.5px}
+  #panel p{font-size:12.5px;line-height:1.75;color:#d8c2a2;margin:9px 0}
+  #panel .big{font-size:14.5px;color:#fff0d5;font-weight:700}
+  #panel .hi{color:#ffcf7a;font-weight:700}
+  .row{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+  .row button{padding:13px;border-radius:14px;font-size:14.5px;font-weight:800;font-family:inherit;letter-spacing:.5px;
+    color:#3a2208;background:linear-gradient(180deg,#ffd79a,#efb057);border:none;box-shadow:0 3px 0 #a9702c}
+  .row button.ghost{background:linear-gradient(180deg,#6b4526,#3a2513);color:#ffe6c4;
+    border:1.5px solid rgba(255,205,140,.28);box-shadow:0 3px 0 #21140a}
+  .row button:active{transform:translateY(2px)}
+  .tip{font-size:11px;color:#a98f70;margin-top:10px;line-height:1.6}
+  @media (orientation:landscape) and (max-height:620px){
+    #app{display:grid;grid-template-columns:min(46vw,330px) 1fr;grid-template-rows:auto auto auto 1fr;
+      grid-template-areas:"hd board" "cards board" "bubble board" "ctrl board";gap:6px 10px}
+    #hd{grid-area:hd}#cards{grid-area:cards}#bubble{grid-area:bubble}#boardWrap{grid-area:board}#ctrl{grid-area:ctrl}
+    #hd h1{font-size:min(4.4vw,22px)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hd">
+    <h1>泥巴菜鸡<span class="vs">⚔</span>糖包</h1>
+    <div id="record">糖包 <b>0</b> 胜 · 菜鸡 <b>0</b> 胜</div>
+  </header>
+  <div id="cards">
+    <div class="card" id="cardMud">
+      <div class="ava">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <ellipse cx="32" cy="42" rx="19" ry="17" fill="#ffd24a"/>
+          <circle cx="32" cy="26" r="14" fill="#ffdd66"/>
+          <path d="M20 44c6 5 18 5 24 0v8c-6 5-18 5-24 0z" fill="#e8b93a" opacity=".65"/>
+          <ellipse cx="30" cy="45" rx="12" ry="8" fill="#7b5230" opacity=".92"/>
+          <ellipse cx="43" cy="48" rx="7" ry="5" fill="#6b4526" opacity=".85"/>
+          <circle cx="26" cy="24" r="2.6" fill="#2c1d0a"/><circle cx="38" cy="24" r="2.6" fill="#2c1d0a"/>
+          <circle cx="26.9" cy="23.1" r=".9" fill="#fff"/><circle cx="38.9" cy="23.1" r=".9" fill="#fff"/>
+          <path d="M32 28l4 3-4 3-4-3z" fill="#ff9d21"/>
+          <path d="M14 18c3 0 5 2 5 5" stroke="#8a5a2c" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <circle cx="49" cy="15" r="4.4" fill="#7b5230" opacity=".8"/>
+        </svg>
+      </div>
+      <div class="meta"><b>泥巴菜鸡</b><span class="tag">你</span></div>
+    </div>
+    <div class="card" id="cardSugar">
+      <div class="ava">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M22 11c2-3 5-3 7 0" stroke="#fff3dc" stroke-width="2" fill="none" opacity=".55" stroke-linecap="round"/>
+          <path d="M35 8c2-3 5-3 7 0" stroke="#fff3dc" stroke-width="2" fill="none" opacity=".45" stroke-linecap="round"/>
+          <ellipse cx="32" cy="39" rx="22" ry="19" fill="#fffaf0"/>
+          <ellipse cx="32" cy="39" rx="22" ry="19" fill="url(#bg2)"/>
+          <path d="M32 20c-9 3-16 10-18 19M32 20c9 3 16 10 18 19M32 20v38M32 20c-5 6-8 13-9 20M32 20c5 6 8 13 9 20"
+            stroke="#e3d3ba" stroke-width="1.6" fill="none" opacity=".9"/>
+          <circle cx="32" cy="27" r="7" fill="#c8863c"/>
+          <circle cx="29.6" cy="24.6" r="2.2" fill="#f0c48a" opacity=".8"/>
+          <path d="M23 40l5 2M41 40l-5 2" stroke="#3a2a12" stroke-width="2.6" stroke-linecap="round"/>
+          <circle cx="26" cy="37" r="2" fill="#2c1d0a"/><circle cx="38" cy="37" r="2" fill="#2c1d0a"/>
+          <defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#e6d8c0" stop-opacity=".2"/>
+          </linearGradient></defs>
+        </svg>
+      </div>
+      <div class="meta"><b>糖包</b><span class="tag ai">超算 AI</span></div>
+    </div>
+  </div>
+  <div id="bubble"><b id="bubbleWho">糖包</b><span id="bubbleTxt">来啊，菜鸡。</span></div>
+  <div id="boardWrap">
+    <canvas id="board"></canvas>
+    <div id="think" class="hide"><i></i><span id="thinkTxt">糖包在算…</span></div>
+  </div>
+  <div id="ctrl">
+    <button id="btnUndo">悔棋 <em id="undoLeft">2</em></button>
+    <button id="btnNew">重开</button>
+    <button id="btnSwap">换先手</button>
+    <button id="btnSound" title="音效">🔊</button>
+  </div>
+  <div id="ovl"><div id="panel"></div></div>
+</div>
+
+<script id="engine">
+/* ==========================================================================
+   五子棋引擎 —— 泥巴菜鸡战糖包
+   纯逻辑，零 DOM 依赖（可单独放进 node 里自测 / 对练）
+
+   思路：
+   1) 局面评估：对每个空点，用 9 格窗口的棋型表（3^8 = 6561 项）算出
+      "这一手下在这里能形成什么棋型"（成五 / 活四 / 冲四 / 活三 / 眠三 / 活二…），
+      四个方向累加。整盘分值 = 所有空点分值之和；落子、撤子只增量更新受影响的点。
+   2) 搜索：迭代加深 α-β + 置换表 + killer + 着法排序。
+      关键增强是"强制着法"：对手有成五点时必须只搜挡点；自己有成五点直接判胜。
+      强制着法会把分支压到 1~2，于是连续冲四（VCF）那类深算几乎不花代价。
+   3) 开局：空盘走天元；后手第一手贴对角。其余全靠搜索。
+   ========================================================================== */
+(function (global) {
+  'use strict';
+
+  var N = 15, SZ = N * N;
+  var EMPTY = 0, BLACK = 1, WHITE = 2;
+  var INF = 1e9, WINSCORE = 5e8;
+
+  /* ---------- 棋型分值 ---------- */
+  var S = {
+    FIVE: 10000000,   // 成五
+    OPEN_FOUR: 300000, // 活四（两头都能成五，基本等于赢）
+    FOUR: 50000,      // 冲四（对手必须挡）
+    OPEN_THREE: 20000, // 活三（对手必须应）
+    THREE: 2000,      // 眠三
+    OPEN_TWO: 500,    // 活二
+    TWO: 100,
+    ONE: 20
+  };
+
+  /* ---------- 方向：横 / 竖 / 撇 / 捺 ---------- */
+  var DR = [0, 1, 1, 1], DC = [1, 0, 1, -1];
+
+  /* ---------- 棋型模板（窗口内中心的 1 是刚下的那手） ---------- */
+  var P_OPEN4 = ['011110'];
+  var P_FOUR = ['11110', '01111', '11011', '10111', '11101'];
+  var P_OPEN3 = ['001110', '011100', '010110', '011010'];
+  var P_THREE = ['01110', '11100', '00111', '11010', '10110', '01101', '10101', '11001', '10011', '01011'];
+  var P_OPEN2 = ['001100', '011000', '000110', '010100', '001010', '101000', '000101'];
+  var P_TWO = ['0110', '1100', '0011', '1010', '0101', '1001'];
+
+  function shapeScore(s) {
+    var i;
+    for (i = 0; i <= 4; i++) {
+      if (s.charCodeAt(i) === 49 && s.charCodeAt(i + 1) === 49 && s.charCodeAt(i + 2) === 49 &&
+          s.charCodeAt(i + 3) === 49 && s.charCodeAt(i + 4) === 49) return S.FIVE;
+    }
+    function hit(len, pats) {
+      var lo = Math.max(0, 4 - len + 1), hi = Math.min(4, 9 - len);
+      for (var k = lo; k <= hi; k++) if (pats.indexOf(s.substr(k, len)) >= 0) return true;
+      return false;
+    }
+    if (hit(6, P_OPEN4)) return S.OPEN_FOUR;
+    if (hit(5, P_FOUR)) return S.FOUR;
+    if (hit(6, P_OPEN3)) return S.OPEN_THREE;
+    if (hit(5, P_THREE)) return S.THREE;
+    if (hit(6, P_OPEN2)) return S.OPEN_TWO;
+    if (hit(4, P_TWO)) return S.TWO;
+    return S.ONE;
+  }
+
+  /* 方向窗口查表：三进制编码 8 个邻格（0 空 / 1 己方 / 2 对方或墙） */
+  var DIRTABLE = new Int32Array(6561);
+  (function buildTable() {
+    var d = new Array(8);
+    for (var code = 0; code < 6561; code++) {
+      var c = code;
+      for (var i = 7; i >= 0; i--) { d[i] = c % 3; c = (c - d[i]) / 3; }
+      DIRTABLE[code] = shapeScore('' + d[0] + d[1] + d[2] + d[3] + '1' + d[4] + d[5] + d[6] + d[7]);
+    }
+  })();
+
+  /* ---------- 局面数据 ---------- */
+  var board = new Int8Array(SZ);
+  var dirSc = new Int32Array(SZ * 8);   // [(cell*4+d)*2 + (p-1)]
+  var pSc = new Int32Array(SZ * 2);     // [cell*2 + (p-1)]
+  var total = new Float64Array(3);      // total[p] = 全盘 p 的潜在分值之和
+  var nc = new Int16Array(SZ);          // 附近 2 格内的落子数
+  var inCand = new Uint8Array(SZ);
+  var listPos = new Int16Array(SZ);
+  var candList = [];
+  var zob = new Int32Array(SZ * 2);
+  var hash = 0, stones = 0;
+
+  (function initZob() {
+    var s = 20250923 | 0;
+    function rnd() { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return s | 0; }
+    for (var i = 0; i < SZ * 2; i++) zob[i] = rnd();
+  })();
+
+  var TIME_TIMEOUT = { timeout: true };
+
+  function inB(r, c) { return r >= 0 && r < N && c >= 0 && c < N; }
+
+  /* ---------- 候选点管理 ---------- */
+  function addCand(cell) {
+    if (board[cell] === EMPTY && !inCand[cell]) {
+      inCand[cell] = 1; listPos[cell] = candList.length; candList.push(cell);
+    }
+  }
+  function delCand(cell) {
+    if (inCand[cell]) {
+      inCand[cell] = 0;
+      var p = listPos[cell], last = candList.pop();
+      if (p < candList.length) { candList[p] = last; listPos[last] = p; }
+    }
+  }
+  function neighborBump(idx, delta) {
+    var r0 = (idx / N) | 0, c0 = idx % N;
+    var r1 = Math.max(0, r0 - 2), r2 = Math.min(N - 1, r0 + 2);
+    var c1 = Math.max(0, c0 - 2), c2 = Math.min(N - 1, c0 + 2);
+    for (var r = r1; r <= r2; r++) {
+      for (var c = c1; c <= c2; c++) {
+        if (r === r0 && c === c0) continue;
+        var cell = r * N + c;
+        nc[cell] += delta;
+        if (delta > 0) { if (nc[cell] === 1) addCand(cell); }
+        else if (nc[cell] <= 0) { nc[cell] = 0; delCand(cell); }
+      }
+    }
+  }
+
+  /* ---------- 分值增量维护 ---------- */
+  function computeDirScore(cell, d, p) {
+    var r0 = (cell / N) | 0, c0 = cell % N, dr = DR[d], dc = DC[d];
+    var code = 0, r, c, b, v, step;
+    for (step = -4; step <= 4; step++) {
+      if (step === 0) continue;
+      r = r0 + step * dr; c = c0 + step * dc; v = 2;
+      if (r >= 0 && r < N && c >= 0 && c < N) {
+        b = board[r * N + c];
+        if (b === EMPTY) v = 0; else if (b === p) v = 1; else v = 2;
+      }
+      code = code * 3 + v;
+    }
+    return DIRTABLE[code];
+  }
+
+  function updateScores(idx) {
+    var r0 = (idx / N) | 0, c0 = idx % N, d, step, p, r, c, cell, b, nv, old, delta;
+    for (d = 0; d < 4; d++) {
+      var dr = DR[d], dc = DC[d];
+      for (step = -4; step <= 4; step++) {
+        r = r0 + step * dr; c = c0 + step * dc;
+        if (r < 0 || r >= N || c < 0 || c >= N) continue;
+        cell = r * N + c;
+        if (board[cell] !== EMPTY) continue;
+        b = cell * 8 + d * 2;
+        for (p = 1; p <= 2; p++) {
+          nv = computeDirScore(cell, d, p);
+          old = dirSc[b + p - 1];
+          if (nv !== old) {
+            dirSc[b + p - 1] = nv;
+            delta = nv - old;
+            pSc[cell * 2 + p - 1] += delta;
+            total[p] += delta;
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------- 落子 / 撤子（搜索内部用） ---------- */
+  function put(idx, p) {
+    board[idx] = p; stones++; hash ^= zob[idx * 2 + p - 1];
+    delCand(idx);
+    neighborBump(idx, 1);
+    var b = idx * 8;
+    total[1] -= pSc[idx * 2]; pSc[idx * 2] = 0;
+    total[2] -= pSc[idx * 2 + 1]; pSc[idx * 2 + 1] = 0;
+    for (var k = 0; k < 8; k++) dirSc[b + k] = 0;
+    updateScores(idx);
+  }
+  function cut(idx) {
+    var p = board[idx];
+    board[idx] = EMPTY; stones--; hash ^= zob[idx * 2 + p - 1];
+    neighborBump(idx, -1);
+    if (nc[idx] > 0) addCand(idx);
+    updateScores(idx);
+  }
+
+  function rebuildAll() {
+    var i, d, p, cell, v, b;
+    dirSc.fill(0); pSc.fill(0); nc.fill(0); inCand.fill(0);
+    candList.length = 0; hash = 0; stones = 0;
+    total[1] = 0; total[2] = 0;
+    for (i = 0; i < SZ; i++) {
+      if (board[i] !== EMPTY) { stones++; hash ^= zob[i * 2 + board[i] - 1]; }
+    }
+    for (i = 0; i < SZ; i++) if (board[i] !== EMPTY) neighborBump(i, 1);
+    for (cell = 0; cell < SZ; cell++) {
+      if (board[cell] !== EMPTY) continue;
+      for (d = 0; d < 4; d++) {
+        b = cell * 8 + d * 2;
+        for (p = 1; p <= 2; p++) {
+          v = computeDirScore(cell, d, p);
+          dirSc[b + p - 1] = v;
+          pSc[cell * 2 + p - 1] += v;
+          total[p] += v;
+        }
+      }
+    }
+  }
+
+  /* ---------- 着法生成（带排序 / 强制着法） ---------- */
+  var MV = 30;
+  var bufCell = [], bufSc = [], bufCnt = [], bufForced = [];
+  var bufFour = [], bufFourS1 = [], bufFourCnt = [];
+  var scratchCell = [], scratchS1 = [], scratchS2 = [];
+  var killers = [];
+  (function initBufs() {
+    for (var i = 0; i < 48; i++) {
+      bufCell.push(new Int32Array(MV));
+      bufSc.push(new Float64Array(MV));
+      bufCnt.push(0);
+      bufForced.push(false);
+      bufFour.push(new Int32Array(6));
+      bufFourS1.push(new Float64Array(6));
+      bufFourCnt.push(0);
+      scratchCell.push(new Int32Array(256));
+      scratchS1.push(new Float64Array(256));
+      scratchS2.push(new Float64Array(256));
+      killers.push([-1, -1]);
+    }
+  })();
+
+  /* 返回 >=0 表示"这一手直接成五"；否则着法写入 bufXxx[ply]，数量在 bufCnt[ply] */
+  function genMoves(ply, me, limit, ttBest) {
+    var opp = 3 - me;
+    var sCell = scratchCell[ply], sS1 = scratchS1[ply], sS2 = scratchS2[ply];
+    var bCell = bufCell[ply], bSc = bufSc[ply];
+    var fCell = bufFour[ply], fS1 = bufFourS1[ply];
+    var k1 = killers[ply][0], k2 = killers[ply][1];
+    var n = 0, nb = 0, nf = 0, i, cell, s1, s2, j3;
+
+    for (i = 0; i < candList.length; i++) {
+      cell = candList[i];
+      s1 = pSc[cell * 2 + me - 1];
+      s2 = pSc[cell * 2 + opp - 1];
+      if (s1 >= S.FIVE) return cell;                       // 自己能成五
+      sCell[n] = cell; sS1[n] = s1; sS2[n] = s2; n++;
+      if (s2 >= S.FIVE) { bCell[nb] = cell; bSc[nb] = s1 + s2; nb++; }
+      else if (s1 >= S.FOUR) {                             // 能冲四的点：静搜里用来做连续冲四（VCF）
+        j3 = (nf < 6) ? nf : 5;
+        while (j3 > 0 && fS1[j3 - 1] < s1) { fS1[j3] = fS1[j3 - 1]; fCell[j3] = fCell[j3 - 1]; j3--; }
+        fS1[j3] = s1; fCell[j3] = cell;
+        if (nf < 6) nf++;
+      }
+    }
+    bufFourCnt[ply] = nf;
+    if (nb > 0) {                                          // 对手有成五点：只能挡
+      for (i = 1; i < nb; i++) {
+        var cc = bCell[i], vv = bSc[i], j = i - 1;
+        while (j >= 0 && bSc[j] < vv) { bCell[j + 1] = bCell[j]; bSc[j + 1] = bSc[j]; j--; }
+        bCell[j + 1] = cc; bSc[j + 1] = vv;
+      }
+      bufCnt[ply] = nb; bufForced[ply] = true;
+      return -1;
+    }
+    var K = Math.min(limit, MV), m = 0;
+    for (i = 0; i < n; i++) {
+      cell = sCell[i];
+      var sc = sS1[i] + sS2[i] * 0.9;
+      if (cell === k1 || cell === k2) sc += 500;
+      if (cell === ttBest) sc += S.OPEN_FOUR;
+      if (m === K && sc <= bSc[K - 1]) continue;
+      var j2 = (m < K) ? m : K - 1;
+      while (j2 > 0 && bSc[j2 - 1] < sc) { bSc[j2] = bSc[j2 - 1]; bCell[j2] = bCell[j2 - 1]; j2--; }
+      bSc[j2] = sc; bCell[j2] = cell;
+      if (m < K) m++;
+    }
+    bufCnt[ply] = m; bufForced[ply] = false;
+    return -1;
+  }
+
+  function moveLimit(depth) {
+    return depth >= 8 ? 9 : depth >= 6 ? 11 : depth >= 4 ? 13 : depth >= 2 ? 16 : 18;
+  }
+
+  /* ---------- 评估 ---------- */
+  var DEFW = 1.05;                                  // 防守权重（略偏防守；实测 1.05 攻守最平衡）
+  function evaluate(me) { return total[me] - DEFW * total[3 - me]; }
+
+  /* ---------- 搜索 ---------- */
+  var nodes = 0, deadline = 0;
+  var tt = new Map();
+  var NOW = (typeof performance !== 'undefined' && performance.now)
+    ? function () { return performance.now(); }
+    : function () { return Date.now(); };
+
+  /* 强制着法静搜（叶子节点不再草草收兵）：
+     1) 自己能成五 → 直接判胜；
+     2) 对手有成五点 → 只能挡，档完继续算（这就是连续冲四 VCF 的防守方视角）；
+     3) 自己能冲四 → 继续做 VCF 杀棋搜索（只取分值最高的 3 个冲四点）。
+     分支极小（通常 1~3），但能把"四 → 挡 → 四 → 挡 → 双四"这类杀棋算穿。 */
+  var QMAX = 8, QBUDGET = 260000, qUsed = 0;
+  function quiesce(alpha, beta, me, ply, qleft) {
+    nodes++;
+    if ((nodes & 255) === 0 && NOW() > deadline) throw TIME_TIMEOUT;
+    if (qUsed > QBUDGET || qleft <= 0) return evaluate(me);
+    qUsed++;
+    var hit = genMoves(ply, me, 20, -1);
+    if (hit >= 0) return WINSCORE - ply - 1;
+    var cnt = bufCnt[ply], cells = bufCell[ply], i, cell, v, best, a;
+    var list, n;
+    if (bufForced[ply]) {
+      if (cnt > 5) return evaluate(me);            // 挡点多说明局面已烂，别炸开
+      best = -INF; list = cells; n = cnt;          // 必须挡，不能"站着不动"
+    } else {
+      var fc = bufFourCnt[ply], fCell = bufFour[ply];
+      best = evaluate(me);                         // 可以不进攻：拿静态分兜底
+      if (fc === 0) return best;
+      list = fCell; n = fc > 3 ? 3 : fc;           // 只看最凶的几个冲四点
+    }
+    a = alpha;
+    if (best > a) a = best;
+    if (a >= beta) return best;
+    for (i = 0; i < n; i++) {
+      cell = list[i];
+      put(cell, me);
+      try { v = -quiesce(-beta, -a, 3 - me, ply + 1, qleft - 1); }
+      finally { cut(cell); }
+      if (v > best) best = v;
+      if (best > a) a = best;
+      if (a >= beta) break;
+    }
+    return best;
+  }
+
+  function negamax(depth, alpha, beta, me, ply) {
+    nodes++;
+    if ((nodes & 255) === 0 && NOW() > deadline) throw TIME_TIMEOUT;
+    var opp = 3 - me;
+    var key = hash ^ (me === 2 ? 0x5bf03635 : 0);
+    var e = tt.get(key), entryBest = -1;
+    if (e !== undefined && e.depth >= depth && Math.abs(e.value) < WINSCORE) {
+      entryBest = e.best;
+      if (e.flag === 0) return e.value;
+      if (e.flag === 1 && e.value <= alpha) return e.value;
+      if (e.flag === 2 && e.value >= beta) return e.value;
+    }
+    if (depth <= 0) return quiesce(alpha, beta, me, ply, QMAX);
+
+    var hit = genMoves(ply, me, moveLimit(depth), entryBest);
+    if (hit >= 0) return WINSCORE - ply - 1;
+
+    var cnt = bufCnt[ply], cells = bufCell[ply];
+    var best = -INF, bestCell = -1, a = alpha, i, cell, v;
+    for (i = 0; i < cnt; i++) {
+      cell = cells[i];
+      put(cell, me);
+      try { v = -negamax(depth - 1, -beta, -a, opp, ply + 1); }
+      finally { cut(cell); }
+      if (v > best) { best = v; bestCell = cell; }
+      if (best > a) a = best;
+      if (a >= beta) {
+        var kl = killers[ply];
+        if (kl[0] !== cell) { kl[1] = kl[0]; kl[0] = cell; }
+        break;
+      }
+    }
+    if (Math.abs(best) < WINSCORE) {
+      var flag = best <= alpha ? 1 : (best >= beta ? 2 : 0);
+      tt.set(key, { depth: depth, value: best, flag: flag, best: bestCell });
+    }
+    return best;
+  }
+
+  function rootSearch(me, depth) {
+    var opp = 3 - me;
+    var cnt = Math.min(bufCnt[0], 22), cells = bufCell[0];
+    var bestVal = -INF, bestCell = cells[0], alpha = -INF, i, cell, v;
+    for (i = 0; i < cnt; i++) {
+      cell = cells[i];
+      put(cell, me);
+      try { v = -negamax(depth - 1, -INF, -alpha, opp, 1); }
+      finally { cut(cell); }
+      if (v > bestVal) { bestVal = v; bestCell = cell; if (v > alpha) alpha = v; }
+    }
+    return { cell: bestCell, val: bestVal };
+  }
+
+  /* ---------- 开局库 ---------- */
+  function firstStones() {
+    var arr = [];
+    for (var i = 0; i < SZ; i++) if (board[i] !== EMPTY) arr.push(i);
+    return arr;
+  }
+  function bookMove(me) {
+    var st = firstStones();
+    if (st.length === 0) return 112;                       // 天元
+    if (st.length === 1) {
+      var idx = st[0], r = (idx / N) | 0, c = idx % N;
+      if (Math.abs(r - 7) + Math.abs(c - 7) >= 4) return 112; // 对手乱下，抢天元
+      var best = -1, bestScore = -1e9;
+      for (var dr = -1; dr <= 1; dr++) {
+        for (var dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          var rr = r + dr, cc = c + dc;
+          if (!inB(rr, cc) || board[rr * N + cc] !== EMPTY) continue;
+          var diag = (dr !== 0 && dc !== 0) ? 1 : 0;
+          var near = -(Math.abs(rr - 7) + Math.abs(cc - 7));
+          var sc = diag * 100 + near;
+          if (sc > bestScore) { bestScore = sc; best = rr * N + cc; }
+        }
+      }
+      return best >= 0 ? best : 112;
+    }
+    return -1;
+  }
+
+  /* ---------- 对外 ---------- */
+  function newGame() {
+    board.fill(0);
+    rebuildAll();
+    tt.clear();
+  }
+
+  function play(idx, p) {
+    if (idx < 0 || idx >= SZ || board[idx] !== EMPTY) return false;
+    put(idx, p);
+    return true;
+  }
+
+  function winLine(idx, p) {
+    if (board[idx] !== p) return null;
+    var r0 = (idx / N) | 0, c0 = idx % N, d;
+    for (d = 0; d < 4; d++) {
+      var dr = DR[d], dc = DC[d], lo = 0, hi = 0;
+      while (inB(r0 - (lo + 1) * dr, c0 - (lo + 1) * dc) && board[(r0 - (lo + 1) * dr) * N + (c0 - (lo + 1) * dc)] === p) lo++;
+      while (inB(r0 + (hi + 1) * dr, c0 + (hi + 1) * dc) && board[(r0 + (hi + 1) * dr) * N + (c0 + (hi + 1) * dc)] === p) hi++;
+      if (lo + hi + 1 >= 5) {
+        var out = [];
+        for (var k = -lo; k <= hi; k++) out.push((r0 + k * dr) * N + (c0 + k * dc));
+        return out;
+      }
+    }
+    return null;
+  }
+  function isWin(idx, p) { return winLine(idx, p) !== null; }
+
+  function snapshot() {
+    return {
+      b: board.slice(), d: dirSc.slice(), p: pSc.slice(),
+      t: Float64Array.from(total), nc: nc.slice(), ic: inCand.slice(),
+      lp: listPos.slice(), cl: candList.slice(), z: hash, s: stones
+    };
+  }
+  function restore(sn) {
+    board.set(sn.b); dirSc.set(sn.d); pSc.set(sn.p); total.set(sn.t);
+    nc.set(sn.nc); inCand.set(sn.ic); listPos.set(sn.lp);
+    candList = sn.cl.slice(); hash = sn.z; stones = sn.s;
+    tt.clear();
+  }
+
+  function think(me, timeMs) {
+    timeMs = timeMs || 1500;
+    var t0 = NOW();
+    tt.clear(); nodes = 0; qUsed = 0;
+    var bk = bookMove(me);
+    if (bk >= 0) return { move: bk, depth: 0, nodes: 0, ms: NOW() - t0, score: 0, book: true };
+
+    var hit = genMoves(0, me, 24, -1);
+    if (hit >= 0) return { move: hit, depth: 0, nodes: 0, ms: NOW() - t0, score: WINSCORE, win: true };
+
+    var safe = board.slice();
+    var bestCell = bufCell[0][0], bestVal = -INF, doneDepth = 0, i;
+    for (var d = 2; d <= 16; d += 2) {
+      // 4 层以内不设硬时限（保证基本棋力），之后按时间预算收
+      if (d <= 4) deadline = t0 + Math.max(timeMs * 1.5, 2200);
+      else deadline = t0 + timeMs;
+      var ts = NOW();
+      var ok = true;
+      try {
+        var res = rootSearch(me, d);
+        bestCell = res.cell; bestVal = res.val; doneDepth = d;
+      } catch (err) {
+        if (err !== TIME_TIMEOUT) throw err;
+        ok = false;
+        board.set(safe); rebuildAll();
+        tt.clear();
+      }
+      var spent = NOW() - ts;
+      if (!ok) break;
+      if (bestVal >= WINSCORE - 1000) break;               // 已经算到必胜
+      if (doneDepth >= 4 && NOW() - t0 + spent * 2.6 > timeMs) break;  // 下一层来不及
+    }
+    return {
+      move: bestCell, depth: doneDepth, nodes: nodes, ms: Math.round(NOW() - t0),
+      score: bestVal, win: bestVal >= WINSCORE - 1000
+    };
+  }
+
+  global.GomokuEngine = {
+    N: N, EMPTY: EMPTY, BLACK: BLACK, WHITE: WHITE, S: S,
+    init: function () { rebuildAll(); tt.clear(); },
+    newGame: newGame, play: play, think: think,
+    isWin: isWin, winLine: winLine,
+    snapshot: snapshot, restore: restore,
+    board: function () { return board; },
+    cellScore: function (idx, p) { return pSc[idx * 2 + p - 1]; },
+    totalOf: function (p) { return total[p]; },
+    stoneCount: function () { return stones; },
+    candidates: function () { return candList.slice(); },
+    hash: function () { return hash; },
+    evalFor: function (p) { return evaluate(p); },
+    rebuildNow: function () { rebuildAll(); },   // 自测用：强制全量重算，校验增量维护
+    setDefWeight: function (w) { DEFW = w; },
+    /* 调试用：列出根着法及其搜索结果（全窗口，慢，不受时间限制） */
+    analyze: function (me, depth, topN) {
+      deadline = Infinity;
+      var hit = genMoves(0, me, 30, -1);
+      var out = [];
+      if (hit >= 0) return [{ cell: hit, val: WINSCORE }];
+      var cnt = Math.min(bufCnt[0], topN || 12), cells = bufCell[0];
+      for (var i = 0; i < cnt; i++) {
+        var cell = cells[i];
+        put(cell, me);
+        var v;
+        try { v = -negamax(depth - 1, -INF, INF, 3 - me, 1); }
+        finally { cut(cell); }
+        out.push({ cell: cell, val: v, my: pSc[cell * 2 + me - 1], opp: pSc[cell * 2 + (3 - me) - 1] });
+      }
+      return out;
+    },
+    thinkInfo: function (me, timeMs) { return think(me, timeMs); }
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var G = globalThis.GomokuEngine;
+  G.init();
+  var N = G.N, SZ = N * N;
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('board'), ctx = cv.getContext('2d');
+  var AI_TIME = 1500;                       // 糖包每手思考预算（毫秒）
+
+  /* ---------- 状态 ---------- */
+  var humanP = 2, aiP = 1;                  // 默认糖包先手（1=先手/2=后手）
+  var hist = [], snaps = [], undoLeft = 2;
+  var over = false, thinking = false, lastMove = -1, winCells = null, winAt = 0;
+  var popAt = {}, particles = [], hoverCell = -1, dirty = true;
+  var record = loadRecord();
+
+  /* ---------- 台词 ---------- */
+  var SUGAR_LINES = ['这步我算到二十层了，菜鸡。', '咦？你还会下这里？', '泥巴糊眼睛了吧。',
+    '别急，我还没使劲。', '看好了，糖包包你。', '你这手，我笑了。', '再来一百局也一样。',
+    '你下一步我都算完了。', '菜鸡的挣扎，真可爱。', '嗯…让我想想怎么赢得更好看。'];
+  var SUGAR_KILL = ['这局我算完了，认输吧。', '五步之内，收工。', '已经结束了，你还没看出来？'];
+  var SUGAR_WIN = ['菜鸡就是菜鸡，糖包就是糖包。', '承让承让，泥巴我收下了。', '下一局？我还想再吃一只鸡。'];
+  var MUD_LINES = ['看我这手！', '泥巴糊你一脸！', '我算过了，这步稳。', '糖包别得意！',
+    '菜鸡也有春天！', '哼，让你见识泥巴的厉害。', '这步绝对没问题！', '我要赢了，真的！'];
+  var lastPick = {};
+  function pick(arr, key) {
+    if (arr.length === 1) return arr[0];
+    var i, tries = 0;
+    do { i = Math.floor(Math.random() * arr.length); tries++; }
+    while (arr[i] === lastPick[key] && tries < 8);
+    lastPick[key] = arr[i];
+    return arr[i];
+  }
+  function say(who, text) {
+    $('bubbleWho').textContent = who === 'sugar' ? '糖包：' : '菜鸡：';
+    $('bubbleTxt').textContent = text;
+    $('bubble').className = who;
+  }
+
+  /* ---------- 音效 ---------- */
+  var actx = null, sndOn = true;
+  function tone(f, d, type, vol, f2) {
+    if (!sndOn) return;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+      o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
+      if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+      g.gain.setValueAtTime(vol || .12, t);
+      g.gain.exponentialRampToValueAtTime(.0001, t + d);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + d + .02);
+    } catch (e) { }
+  }
+  var sfx = {
+    place: function () { tone(430, .09, 'sine', .12, 250); },
+    sugar: function () { tone(700, .1, 'triangle', .1, 900); },
+    win: function () { [523, 659, 784, 1046].forEach(function (f, i) { setTimeout(function () { tone(f, .2, 'triangle', .12); }, i * 95); }); },
+    lose: function () { [400, 320, 240, 180].forEach(function (f, i) { setTimeout(function () { tone(f, .26, 'sawtooth', .075); }, i * 140); }); },
+    undo: function () { tone(320, .14, 'sine', .1, 170); }
+  };
+
+  /* ---------- 战绩 ---------- */
+  function loadRecord() {
+    var d = { sugar: 0, chick: 0, draw: 0 };
+    try {
+      var s = JSON.parse(localStorage.getItem('mudGomokuRecord') || 'null');
+      if (s && typeof s.sugar === 'number') d = s;
+    } catch (e) { }
+    return d;
+  }
+  function saveRecord() { try { localStorage.setItem('mudGomokuRecord', JSON.stringify(record)); } catch (e) { } }
+  function showRecord() {
+    var t = '糖包 <b>' + record.sugar + '</b> 胜 · 菜鸡 <b>' + record.chick + '</b> 胜';
+    if (record.draw) t += ' · 平 <b>' + record.draw + '</b>';
+    $('record').innerHTML = t;
+  }
+
+  /* ---------- 画布尺寸 / 素材 ---------- */
+  var CSSSZ = 0, CELL = 0, PAD = 0, DPR = 1, bg = null, sprMud = null, sprSugar = null, SPR = 0;
+  function pos(cell) { var r = (cell / N) | 0, c = cell % N; return { x: PAD + c * CELL, y: PAD + r * CELL }; }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function makeSprite(drawFn) {
+    var r = CELL * .44, c = document.createElement('canvas');
+    var half = Math.ceil(r * 1.22), size = Math.ceil(half * 2);
+    SPR = size;
+    c.width = Math.ceil(size * DPR); c.height = Math.ceil(size * DPR);
+    var x = c.getContext('2d');
+    x.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawFn(x, half, half, r);
+    return c;
+  }
+  function drawMudSprite(c, cx, cy, r) {
+    var g = c.createRadialGradient(cx - r * .35, cy - r * .42, r * .12, cx, cy, r * 1.08);
+    g.addColorStop(0, '#bb9264'); g.addColorStop(.45, '#7d5430'); g.addColorStop(1, '#331d0d');
+    c.beginPath(); c.arc(cx, cy, r, 0, 6.2832); c.fillStyle = g; c.fill();
+    c.lineWidth = Math.max(1, r * .1); c.strokeStyle = 'rgba(28,16,6,.9)'; c.stroke();
+    c.fillStyle = 'rgba(42,25,10,.5)';
+    for (var i = 0; i < 5; i++) {
+      var a = i * 1.9, rr = r * (.52 + .18 * (i % 3));
+      c.beginPath(); c.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * .85, Math.max(.7, r * .1), 0, 6.2832); c.fill();
+    }
+    var ex = r * .31, ey = cy - r * .1, er = r * .21;
+    c.fillStyle = '#fff';
+    c.beginPath(); c.arc(cx - ex, ey, er, 0, 6.2832); c.fill();
+    c.beginPath(); c.arc(cx + ex, ey, er, 0, 6.2832); c.fill();
+    c.fillStyle = '#241505';
+    c.beginPath(); c.arc(cx - ex * .92, ey + r * .02, er * .5, 0, 6.2832); c.fill();
+    c.beginPath(); c.arc(cx + ex * .92, ey + r * .02, er * .5, 0, 6.2832); c.fill();
+    c.fillStyle = '#ffa930';
+    c.beginPath(); c.moveTo(cx - r * .14, cy + r * .2); c.lineTo(cx + r * .14, cy + r * .2); c.lineTo(cx, cy + r * .5); c.closePath(); c.fill();
+  }
+  function drawSugarSprite(c, cx, cy, r) {
+    var g = c.createRadialGradient(cx - r * .34, cy - r * .4, r * .1, cx, cy, r * 1.04);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(.55, '#fbf4e6'); g.addColorStop(1, '#dccfb8');
+    c.beginPath(); c.arc(cx, cy, r, 0, 6.2832); c.fillStyle = g; c.fill();
+    c.lineWidth = Math.max(1, r * .09); c.strokeStyle = 'rgba(150,124,86,.7)'; c.stroke();
+    c.strokeStyle = 'rgba(202,168,120,.7)'; c.lineWidth = Math.max(.7, r * .07);
+    for (var i = 0; i < 5; i++) {
+      var a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+      c.beginPath();
+      c.moveTo(cx + Math.cos(a) * r * .93, cy + Math.sin(a) * r * .93);
+      c.quadraticCurveTo(cx + Math.cos(a) * r * .38 + r * .13, cy + Math.sin(a) * r * .38, cx, cy);
+      c.stroke();
+    }
+    c.fillStyle = '#c0803a';
+    c.beginPath(); c.arc(cx, cy - r * .04, r * .3, 0, 6.2832); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.55)';
+    c.beginPath(); c.arc(cx - r * .1, cy - r * .16, r * .09, 0, 6.2832); c.fill();
+  }
+  function buildBg() {
+    bg = document.createElement('canvas');
+    bg.width = Math.ceil(CSSSZ * DPR); bg.height = Math.ceil(CSSSZ * DPR);
+    var c = bg.getContext('2d');
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    var S = CSSSZ, cell = CELL, pad = PAD, R = mulberry32(20250923), i;
+    var g = c.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, '#dfba80'); g.addColorStop(.42, '#cda166'); g.addColorStop(1, '#ae8050');
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+    for (i = 0; i < 30; i++) {                       // 泥斑
+      var x = R() * S, y = R() * S, rr = (.05 + R() * .17) * S;
+      c.globalAlpha = .05 + R() * .07;
+      c.fillStyle = R() < .55 ? '#8a5a2c' : '#efd7a6';
+      c.beginPath(); c.ellipse(x, y, rr, rr * (.55 + R() * .8), R() * 3.14, 0, 6.2832); c.fill();
+    }
+    c.globalAlpha = 1;
+    var vg = c.createRadialGradient(S / 2, S / 2, S * .18, S / 2, S / 2, S * .78);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(66,38,14,.34)');
+    c.fillStyle = vg; c.fillRect(0, 0, S, S);
+    c.strokeStyle = 'rgba(86,52,22,.7)'; c.lineWidth = Math.max(1, cell * .04);
+    for (i = 0; i < N; i++) {
+      var p = pad + i * cell;
+      c.beginPath(); c.moveTo(pad, p); c.lineTo(pad + (N - 1) * cell, p); c.stroke();
+      c.beginPath(); c.moveTo(p, pad); c.lineTo(p, pad + (N - 1) * cell); c.stroke();
+    }
+    c.lineWidth = Math.max(1.4, cell * .085); c.strokeStyle = 'rgba(72,42,16,.85)';
+    c.strokeRect(pad, pad, (N - 1) * cell, (N - 1) * cell);
+    c.fillStyle = 'rgba(72,42,16,.8)';
+    [[3, 3], [3, 11], [11, 3], [11, 11], [7, 7]].forEach(function (p2) {
+      c.beginPath(); c.arc(pad + p2[1] * cell, pad + p2[0] * cell, Math.max(1.7, cell * .085), 0, 6.2832); c.fill();
+    });
+  }
+  function layout() {
+    var wrap = $('boardWrap');
+    var w = wrap.clientWidth, h = wrap.clientHeight;
+    if (w < 40 || h < 40) return;
+    var s = Math.max(190, Math.floor(Math.min(w, h)) - 2);
+    CSSSZ = s; CELL = s / (N + 1); PAD = CELL;
+    DPR = Math.min(3, window.devicePixelRatio || 1);
+    cv.style.width = s + 'px'; cv.style.height = s + 'px';
+    cv.width = Math.ceil(s * DPR); cv.height = Math.ceil(s * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildBg();
+    sprMud = makeSprite(drawMudSprite); sprSugar = makeSprite(drawSugarSprite);
+    render();
+  }
+
+  /* ---------- 绘制 ---------- */
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function draw() {
+    if (!CSSSZ || !bg) return;
+    ctx.clearRect(0, 0, CSSSZ, CSSSZ);
+    ctx.drawImage(bg, 0, 0, CSSSZ, CSSSZ);
+    var now = performance.now(), bd = G.board(), i, p, pt;
+    if (lastMove >= 0 && bd[lastMove]) {          // 最后一手标记
+      pt = pos(lastMove);
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, CELL * .49, 0, 6.2832);
+      ctx.strokeStyle = bd[lastMove] === aiP ? 'rgba(255,196,92,.9)' : 'rgba(255,120,80,.9)';
+      ctx.lineWidth = Math.max(1.4, CELL * .075); ctx.stroke();
+    }
+    for (i = 0; i < SZ; i++) {                    // 棋子
+      p = bd[i]; if (!p) continue;
+      pt = pos(i);
+      var sc = 1, t = popAt[i];
+      if (t !== undefined) {
+        var k = (now - t) / 170;
+        if (k < 1) sc = .5 + .5 * easeOut(k); else delete popAt[i];
+      }
+      var spr = p === aiP ? sprSugar : sprMud;
+      var size = SPR * sc;
+      ctx.drawImage(spr, pt.x - size / 2, pt.y - size / 2, size, size);
+    }
+    if (winCells) {
+      var k2 = Math.min(1, (now - winAt) / 500), pulse = .55 + .45 * Math.sin(now / 220);
+      var a = winCells[0], b = winCells[winCells.length - 1], pa = pos(a), pb = pos(b);
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255,214,110,' + (.35 + .3 * pulse) + ')';
+      ctx.lineWidth = CELL * (.22 + .07 * pulse); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,246,200,' + (.5 + .4 * pulse) + ')';
+      ctx.lineWidth = CELL * .1; ctx.stroke();
+      winCells.forEach(function (c2, j) {
+        var pc = pos(c2), sc2 = 1 + .18 * pulse;
+        ctx.globalAlpha = .5 * k2;
+        var spr2 = ctx.createRadialGradient(pc.x, pc.y, 0, pc.x, pc.y, CELL * .7 * sc2);
+        spr2.addColorStop(0, 'rgba(255,235,150,.85)'); spr2.addColorStop(1, 'rgba(255,200,80,0)');
+        ctx.fillStyle = spr2;
+        ctx.beginPath(); ctx.arc(pc.x, pc.y, CELL * .7 * sc2, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+      ctx.lineCap = 'butt';
+    }
+    if (hoverCell >= 0 && !over && !thinking && !bd[hoverCell] && turnP() === humanP) {
+      var ph = pos(hoverCell);
+      ctx.globalAlpha = .35;
+      ctx.drawImage(sprMud, ph.x - SPR / 2, ph.y - SPR / 2, SPR, SPR);
+      ctx.globalAlpha = 1;
+    }
+    for (i = 0; i < particles.length; i++) {       // 泥点 / 糖粒
+      var q = particles[i];
+      ctx.globalAlpha = Math.max(0, q.life) * .85;
+      ctx.fillStyle = q.c;
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function stepParticles() {
+    var alive = [];
+    for (var i = 0; i < particles.length; i++) {
+      var q = particles[i];
+      q.x += q.vx / 60; q.y += q.vy / 60; q.vy += 300 / 60; q.life -= 1 / 38;
+      if (q.life > 0) alive.push(q);
+    }
+    particles = alive;
+  }
+  function spawn(cell, kind) {
+    var pt = pos(cell);
+    for (var i = 0; i < 13; i++) {
+      var a = Math.random() * 6.2832, sp = 25 + Math.random() * 95;
+      particles.push({
+        x: pt.x + (Math.random() - .5) * CELL * .3, y: pt.y + (Math.random() - .5) * CELL * .3,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 45, r: 1.3 + Math.random() * 2.6, life: 1,
+        c: kind === 'mud' ? 'rgb(124,81,42)' : 'rgb(255,238,206)'
+      });
+    }
+  }
+  function loop() {
+    requestAnimationFrame(loop);
+    var busy = particles.length > 0 || Object.keys(popAt).length > 0 || thinking ||
+      (winCells && performance.now() - winAt < 1800);
+    if (busy) { stepParticles(); draw(); dirty = false; }
+    else if (dirty) { dirty = false; draw(); }
+  }
+  /* 状态一变就同步重绘一次：不依赖动画帧（切后台时 rAF 会被浏览器暂停） */
+  function render() { dirty = false; draw(); }
+
+  /* ---------- 交互 ---------- */
+  function hit(ev) {
+    var rect = cv.getBoundingClientRect();
+    var x = (ev.clientX - rect.left) * (CSSSZ / rect.width);
+    var y = (ev.clientY - rect.top) * (CSSSZ / rect.height);
+    var c = Math.round((x - PAD) / CELL), r = Math.round((y - PAD) / CELL);
+    if (r < 0 || r >= N || c < 0 || c >= N) return -1;
+    if (Math.hypot(x - (PAD + c * CELL), y - (PAD + r * CELL)) > CELL * .62) return -1;
+    return r * N + c;
+  }
+  cv.addEventListener('pointerdown', function (ev) {
+    ev.preventDefault();
+    if (over || thinking || turnP() !== humanP) return;
+    var cell = hit(ev);
+    if (cell < 0 || G.board()[cell] !== 0) return;
+    humanMove(cell);
+  }, { passive: false });
+  cv.addEventListener('pointermove', function (ev) {
+    if (ev.pointerType === 'touch') return;
+    var cell = hit(ev);
+    if (cell !== hoverCell) { hoverCell = cell; dirty = true; }
+  });
+  cv.addEventListener('pointerleave', function () { hoverCell = -1; dirty = true; });
+
+  /* ---------- 对局流程 ---------- */
+  function turnP() { return hist.length % 2 === 0 ? 1 : 2; }
+  function newGame(aiFirst) {
+    G.newGame();
+    hist = []; snaps = [G.snapshot()];
+    undoLeft = 2; over = false; thinking = false; lastMove = -1; winCells = null;
+    popAt = {}; particles = []; hoverCell = -1;
+    humanP = aiFirst ? 2 : 1; aiP = 3 - humanP;
+    $('ovl').classList.add('hide');
+    $('think').classList.add('hide');
+    showRecord(); updateCtrl();
+    markTurn();
+    turn();
+    say(aiFirst ? 'sugar' : 'mud', aiFirst ? pick(SUGAR_LINES, 's') : pick(MUD_LINES, 'm'));
+    render();
+  }
+  function markTurn() {
+    var p = turnP();
+    $('cardMud').classList.toggle('on', !over && p === humanP);
+    $('cardSugar').classList.toggle('on', !over && p === aiP);
+  }
+  function updateCtrl() {
+    $('undoLeft').textContent = undoLeft;
+    $('btnUndo').disabled = over || thinking || undoLeft <= 0;
+    $('btnNew').disabled = false;
+    $('btnSwap').disabled = thinking;
+  }
+  function turn() {
+    markTurn();
+    if (over) return;
+    if (turnP() === aiP) aiPlay();
+    else { $('bubbleTxt').textContent = '该你了，落子吧。'; $('bubble').className = 'mud'; }
+  }
+  function commit(cell, p) {
+    if (!G.play(cell, p)) return false;
+    hist.push({ i: cell, p: p });
+    snaps.push(G.snapshot());
+    lastMove = cell; popAt[cell] = performance.now();
+    spawn(cell, p === aiP ? 'sugar' : 'mud');
+    return true;
+  }
+  function humanMove(cell) {
+    if (!commit(cell, humanP)) return;
+    sfx.place();
+    var line = G.winLine(cell, humanP);
+    if (line) { endGame(humanP, line); return; }
+    if (hist.length >= SZ) { endGame(0, null); return; }
+    say('mud', pick(MUD_LINES, 'm'));
+    updateCtrl();
+    turn();
+  }
+  function aiPlay() {
+    thinking = true; updateCtrl(); markTurn();
+    $('think').classList.remove('hide');
+    $('thinkTxt').textContent = '糖包在算…';
+    setTimeout(function () {
+      var r;
+      try { r = G.think(aiP, AI_TIME); }
+      catch (e) {
+        // 极端情况下退化为"第一个候选点"
+        var cand = G.candidates();
+        r = { move: cand.length ? cand[0] : 112, depth: 0, nodes: 0, ms: 0, score: 0 };
+      }
+      thinking = false;
+      $('think').classList.add('hide');
+      var mv = r.move;
+      if (mv < 0) mv = 112;
+      if (!G.board()[mv]) commit(mv, aiP);
+      sfx.sugar();
+      updateCtrl();
+      var line = G.winLine(mv, aiP);
+      if (line) { endGame(aiP, line); return; }
+      if (hist.length >= SZ) { endGame(0, null); return; }
+      say('sugar', r.win ? pick(SUGAR_KILL, 'k') : pick(SUGAR_LINES, 's'));
+      render();
+      turn();
+    }, 60);
+  }
+  function undo() {
+    if (over || thinking || undoLeft <= 0) return;
+    var k = hist.length, removedHuman = false;
+    while (k > 0 && hist[k - 1].p === aiP) k--;
+    if (k > 0 && hist[k - 1].p === humanP) { k--; removedHuman = true; }
+    if (!removedHuman) return;
+    hist = hist.slice(0, k);
+    snaps = snaps.slice(0, k + 1);
+    G.restore(snaps[k]);
+    undoLeft--;
+    over = false; winCells = null;
+    lastMove = k > 0 ? hist[k - 1].i : -1;
+    popAt = {}; particles = []; hoverCell = -1;
+    sfx.undo();
+    updateCtrl();
+    turn();
+    say('mud', '这手不算，我重下！');
+    render();
+  }
+  function endGame(winner, line) {
+    over = true; thinking = false; winCells = line; winAt = performance.now();
+    $('think').classList.add('hide');
+    var dur = 0, x = (performance.now() - hist.length * 0);
+    if (winner === aiP) { record.sugar++; sfx.lose(); }
+    else if (winner === humanP) { record.chick++; sfx.win(); }
+    else { record.draw++; sfx.undo(); }
+    saveRecord(); showRecord(); updateCtrl(); markTurn();
+    render();
+    setTimeout(function () { showResult(winner); }, line ? 1500 : 400);
+  }
+  function showResult(winner) {
+    var h = '';
+    if (winner === aiP) {
+      h = '<h2>糖包赢了 🍬</h2><div class="sub">' + pick(SUGAR_WIN, 'w') + '</div>' +
+        '<p>本局 <span class="hi">' + hist.length + '</span> 手。糖包总战绩：<span class="hi">' +
+        record.sugar + '</span> 胜。</p>';
+    } else if (winner === humanP) {
+      h = '<h2>不可能…你赢了？！</h2><div class="sub">糖包：一定是手机卡了。</div>' +
+        '<p>恭喜！本局 <span class="hi">' + hist.length + '</span> 手。这个战绩会被记下来。</p>';
+    } else {
+      h = '<h2>平局</h2><div class="sub">泥巴和糖糊成一团了。</div><p>再打一局分个高低。</p>';
+    }
+    h += '<div class="row">' +
+      '<button id="againAi">再来一局（糖包先走）</button>' +
+      '<button id="againMe" class="ghost">再来一局（我先走）</button>' +
+      '<button id="againSame" class="ghost">看这盘棋（慢着）</button></div>' +
+      '<div class="tip">提示：你有 2 次悔棋机会，只能悔自己的棋。</div>';
+    $('panel').innerHTML = h;
+    $('ovl').classList.remove('hide');
+    $('againAi').onclick = function () { newGame(true); };
+    $('againMe').onclick = function () { newGame(false); };
+    $('againSame').onclick = function () { $('ovl').classList.add('hide'); };
+  }
+  function showStart() {
+    var h = '<h2>泥巴菜鸡 ⚔ 糖包</h2>' +
+      '<div class="sub">15×15 五子连珠 · 手机直接玩</div>' +
+      '<p>糖包是泥巴味超算：<span class="hi">六层以上算路 + 连续冲四杀棋</span>，' +
+      '建成双活三、四三杀就一口吃掉你。放水？不存在的。</p>' +
+      '<p class="big">选谁先走：</p>' +
+      '<div class="row">' +
+      '<button id="stAi">糖包先走（推荐 · 你更没机会）</button>' +
+      '<button id="stMe" class="ghost">我先走（菜鸡也要面子）</button>' +
+      '</div>' +
+      '<div class="tip">你有 2 次悔棋机会，只能悔自己的棋。<br>想赢糖包？目前全网还没有人做到。</div>';
+    $('panel').innerHTML = h;
+    $('ovl').classList.remove('hide');
+    $('stAi').onclick = function () { newGame(true); };
+    $('stMe').onclick = function () { newGame(false); };
+  }
+
+  /* ---------- 绑定 ---------- */
+  $('btnUndo').onclick = undo;
+  $('btnNew').onclick = function () { if (!thinking) newGame(aiP === 1); };
+  $('btnSwap').onclick = function () { if (!thinking) newGame(aiP !== 1); };
+  $('btnSound').onclick = function () {
+    sndOn = !sndOn;
+    $('btnSound').textContent = sndOn ? '🔊' : '🔇';
+    if (sndOn) sfx.place();
+  };
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', function () { setTimeout(layout, 260); });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); });
+
+  layout();
+  showRecord();
+  updateCtrl();
+  requestAnimationFrame(loop);
+  setTimeout(function () { layout(); }, 120);
+  showStart();
+})();
+</script>
+</body>
+</html>
